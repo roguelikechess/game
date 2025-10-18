@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>발판 밟고 내려가기</title>
+  <style>
+    html, body { height: 100%; margin: 0; background:#0b0f14; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Nanum Gothic", "나눔고딕", sans-serif; }
+    #wrap { display:flex; align-items:center; justify-content:center; height:100%; }
+    #frame { background:#0f141b; border:1px solid #1f2a37; border-radius:14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); overflow:hidden; }
+    canvas { display:block; image-rendering: pixelated; }
+    .hint { position:absolute; top:10px; left:10px; color:#8aa4bf; font-size:12px; opacity:.8; }
+    .credit { position:absolute; bottom:10px; left:10px; color:#607a96; font-size:11px; opacity:.7; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="frame">
+      <canvas id="game" width="800" height="600" aria-label="발판 밟고 내려가기 게임"></canvas>
+    </div>
+  </div>
+  <script>
+// ==== Clean, brace-checked game script (replaced fully) ====
+(function(){
+  'use strict';
+  // Canvas & constants
+  const W=800,H=600,HUD_W=200,PLAY_W=H,PLAY_H=H,SPIKE_H=24;
+  const canvas=document.getElementById('game');
+  const ctx=canvas.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+
+  // State
+  const STATE={TITLE:0,PLAY:1,OVER:2,WIN:3};
+  let state=STATE.TITLE;
+
+  // Input
+  const KEYS={left:false,right:false,any:false};
+  addEventListener('keydown',e=>{
+    if(e.repeat) return;
+    KEYS.any=true;
+    if(e.key==='ArrowLeft'||e.key==='a') KEYS.left=true;
+    if(e.key==='ArrowRight'||e.key==='d') KEYS.right=true;
+    if(state===STATE.OVER||state===STATE.WIN){ startGame(); }
+  });
+  addEventListener('keyup',e=>{
+    if(e.key==='ArrowLeft'||e.key==='a') KEYS.left=false;
+    if(e.key==='ArrowRight'||e.key==='d') KEYS.right=false;
+  });
+  addEventListener('pointerdown',()=>{ KEYS.any=true; if(state===STATE.OVER||state===STATE.WIN) startGame(); });
+
+  // Audio helpers (silent fallback if missing)
+  function loadAudio(urls,opts={}){
+    const a=new Audio(); if(opts.loop) a.loop=true; if(opts.volume!=null) a.volume=opts.volume;
+    let sel=null; for(const u of urls){ const ok=a.canPlayType('audio/'+(u.endsWith('.mp3')?'mpeg':'ogg')); if(ok){ sel=u; break; } }
+    if(!sel) return { play:()=>{}, pause:()=>{}, currentTime:0, playing:false };
+    a.src=sel; a.addEventListener('play',()=>a.playing=true); a.addEventListener('pause',()=>a.playing=false); a.addEventListener('ended',()=>a.playing=false); return a;
+  }
+const SFX={
+  start:loadAudio(['assets/sfx_start.mp3','assets/sfx_start.ogg']),
+  fall: loadAudio(['assets/sfx_fall.mp3','assets/sfx_fall.ogg']),
+  over: loadAudio(['assets/sfx_gameover.mp3','assets/sfx_gameover.ogg']),
+  land: loadAudio(['assets/sfx_land.mp3','assets/sfx_land.ogg']), // 🆕 착지 효과음
+  bgm:  loadAudio(['assets/bgm.mp3','assets/bgm.ogg'],{loop:true,volume:0.5})
+};;
+  function stopBGM(){ try{ SFX.bgm.pause(); }catch(_){ } }
+
+  // Sprites (optional)
+  function loadImage(src){ const img=new Image(); img.src=src; img.onerror=()=>img._missing=true; return img; }
+  function hasImage(img){ return img && !img._missing && img.complete; }
+  const SPRITES={
+    playerLeft:  loadImage('assets/player_left.png'),
+    playerRight: loadImage('assets/player_right.png'),
+    spikeTop:    loadImage('assets/spike_top.png'),
+    platNormal:  loadImage('assets/plat_normal.png'),
+    platConvR:   loadImage('assets/plat_conveyor_right.png'),
+    platConvL:   loadImage('assets/plat_conveyor_left.png'),
+    platJump:    loadImage('assets/plat_jump.png'),
+    bg:          loadImage('assets/bg.png')
+  };
+
+  // Utils
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const rand=(a,b)=>a+Math.random()*(b-a);
+
+  // Level/difficulty
+  const LVL_MAX=100, LVL_TIME=15, BASE_RISE=55;
+
+  // Platform defs
+  const PLATFORM={NORMAL:0,CONVEYOR:1,JUMP:2};
+  const PLATFORM_H=16; let PLATFORM_W=(PLAY_W/4)|0;
+  const platforms=[];
+
+  // Player
+  const player={
+    x:PLAY_W/2-18, y:PLAY_H/2, w:36, h:56,
+    vx:0, vy:0, dir:1,
+    runSpeed:100, // constant run speed (non-conveyor)
+    onGround:false, onPlat:null, alive:true,
+    landLock:0
+  };
+
+  // Spawning
+  let spawnCooldown=0; const SPAWN_INTERVAL=0.8;
+
+  // Score/level
+  let level=1, timeInLevel=0, elapsed=0; let best=parseInt(localStorage.getItem('best_level')||'0',10);
+
+  // Retry button
+  const retryBtn={x:PLAY_W/2-80,y:PLAY_H/2+40,w:160,h:42};
+  canvas.addEventListener('click',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
+    const my=(e.clientY-rect.top)*(canvas.height/rect.height);
+    if(state===STATE.TITLE){ startGame(); }
+    else if(state===STATE.OVER||state===STATE.WIN){
+      if(mx>=retryBtn.x && mx<=retryBtn.x+retryBtn.w && my>=retryBtn.y && my<=retryBtn.y+retryBtn.h){ startGame(); }
+    }
+  });
+
+  function saveBest(){ if(level>best){ best=level; localStorage.setItem('best_level',String(best)); } }
+  function reset(){
+    platforms.length=0;
+    player.x=PLAY_W/2-player.w/2; player.y=PLAY_H*0.25; player.vx=0; player.vy=0; player.dir=1; player.onGround=false; player.onPlat=null; player.alive=true; player.landLock=0;
+    level=1; timeInLevel=0; elapsed=0; spawnCooldown=0.5;
+    seedInitialPlatforms();
+  }
+  function startGame(){
+    reset(); state=STATE.PLAY;
+    try{ SFX.start.play(); }catch(_){ }
+    if(SFX.bgm && !SFX.bgm.playing){ try{ SFX.bgm.currentTime=0; SFX.bgm.play(); }catch(_){ } }
+  }
+
+  // Input → direction only; constant speed unless on conveyor
+  function handleInput(dt){
+    if(KEYS.left)  player.dir=-1;
+    if(KEYS.right) player.dir=1;
+
+    let speed = player.runSpeed * player.dir;
+    if(player.onPlat && player.onPlat.type===PLATFORM.CONVEYOR){
+      const convDir=player.onPlat.convDir;
+      if(KEYS.left||KEYS.right){
+        const same=(player.dir===convDir);
+        speed = player.runSpeed * (same?1.8:0.5) * player.dir;
+      } else {
+        speed = player.runSpeed * 1.6 * convDir;
+      }
+    }
+    player.vx = speed;
+
+    if(player.landLock>0){ player.landLock=Math.max(0,player.landLock-dt); }
+  }
+
+  // Physics
+  const GRAV=850, JUMP_V=-400;
+  function getRiseSpeed(){ return BASE_RISE*(1+0.01*(level-1)); }
+
+  function update(dt){
+    if(state!==STATE.PLAY) return;
+    // Level timer
+    elapsed+=dt; timeInLevel+=dt;
+    if(timeInLevel>=LVL_TIME && level<LVL_MAX){ timeInLevel-=LVL_TIME; level++; }
+    if(level===LVL_MAX && elapsed>=(LVL_TIME*(LVL_MAX-1))){ state=STATE.WIN; stopBGM(); saveBest(); return; }
+
+    // Spawning
+    const rise=getRiseSpeed();
+    spawnCooldown-=dt; const desired=SPAWN_INTERVAL*(55/rise);
+    if(spawnCooldown<=0){ spawnCooldown=rand(desired*0.7,desired*1.3); spawnPlatform(); }
+
+    // Move platforms upward
+    for(const p of platforms){ p.y -= rise*dt; }
+    for(let i=platforms.length-1;i>=0;i--){ if(platforms[i].y+PLATFORM_H<0) platforms.splice(i,1); }
+
+    // Player movement
+    handleInput(dt);
+    player.vy += GRAV*dt;
+
+    // Horizontal movement & wall collision
+    player.x += player.vx*dt;
+    if(player.x<0){ player.x=0; player.vx=Math.abs(player.vx)*0.2; player.dir=1; }
+    if(player.x+player.w>PLAY_W){ player.x=PLAY_W-player.w; player.vx=-Math.abs(player.vx)*0.2; player.dir=-1; }
+
+    // Vertical movement prep
+    const prevY = player.y;
+    player.onGround=false; player.onPlat=null;
+    player.y += player.vy*dt;
+
+    // Top spikes
+    if(player.y<=SPIKE_H){ die(); return; }
+
+    for(const p of platforms){
+      const px=p.x, py=p.y, pw=p.w, ph=PLATFORM_H;
+      const prevPlatY = py + rise*dt; // previous frame platform y
+      const wasAbove = (prevY + player.h) <= prevPlatY + 0.5;
+      // 발판 충돌은 '발 밑 5px'만 사용 (시각적 높이보다 얕은 콜라이더)
+      const fx = player.x;
+      const fy = player.y + player.h - 5;
+      const fw = player.w;
+      const fh = 5;
+
+      // 점프(상향 이동) 중에는 발판을 관통 허용 (원웨이)
+      if(player.vy < 0) continue;
+
+      if(rectOverlap(fx,fy,fw,fh,px,py,pw,ph)){
+        if(wasAbove){
+          // 위에서 내려앉음만 처리 (측면 충돌로 밀림 방지)
+          player.y = py - player.h;
+          player.vy = 0;
+          player.onGround = true;
+          player.onPlat = p;
+          player.landLock = 0.2;
+          try { SFX.land.currentTime = 0; SFX.land.play(); } catch(_){}
+
+          if(p.type===PLATFORM.JUMP){ player.vy = JUMP_V; player.landLock = 0; }
+        }
+      }
+    }
+
+    // Bottom
+    if(player.y + player.h >= PLAY_H){
+      if(!player.onGround){ try{ SFX.fall.play(); }catch(_){ } die(); return; }
+      player.y = PLAY_H - player.h; player.vy = -60;
+    }
+
+    // Crushed to spikes by rising platform
+    if(player.onGround){ const riseDy=rise*dt; if(player.y - riseDy <= SPIKE_H){ die(); return; } }
+  }
+
+  function die(){ state=STATE.OVER; stopBGM(); saveBest(); try{ SFX.over.play(); }catch(_){ } }
+  function rectOverlap(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
+
+  function spawnPlatform(){
+    const margin=6; const x=Math.floor(rand(margin,PLAY_W-PLATFORM_W-margin)); const y=PLAY_H-PLATFORM_H-1;
+    const normalDrop=(level-1)/(LVL_MAX-1);
+    const pNormal=0.65-0.50*normalDrop; const pConv=0.25+0.30*normalDrop; const pJump=1-(pNormal+pConv);
+    const r=Math.random(); let type=PLATFORM.NORMAL;
+    if(r<pNormal) type=PLATFORM.NORMAL; else if(r<pNormal+pConv) type=PLATFORM.CONVEYOR; else type=PLATFORM.JUMP;
+    const plat={x,y,w:PLATFORM_W,type,convDir:(Math.random()<0.5?-1:1)};
+    platforms.push(plat); return plat;
+  }
+
+  function seedInitialPlatforms(){
+    const underX=clamp(player.x+player.w/2-PLATFORM_W/2,8,PLAY_W-PLATFORM_W-8);
+    const underY=Math.min(PLAY_H-PLATFORM_H-2, player.y+player.h+6);
+    platforms.push({x:Math.round(underX), y:Math.round(underY), w:PLATFORM_W, type:PLATFORM.NORMAL, convDir:1});
+    const rows=5; for(let i=0;i<rows;i++){ const y=PLAY_H-(i+1)*70; if(y>SPIKE_H+40 && y>underY+20){ const x=Math.floor(rand(8,PLAY_W-PLATFORM_W-8)); platforms.push({x,y,w:PLATFORM_W,type:PLATFORM.NORMAL,convDir:1}); } }
+  }
+
+  // Draw
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // BG
+    if(hasImage(SPRITES.bg)){
+      const pat=ctx.createPattern(SPRITES.bg,'repeat'); ctx.fillStyle=pat; ctx.fillRect(0,0,PLAY_W,PLAY_H);
+    } else {
+      const g=ctx.createLinearGradient(0,0,0,PLAY_H); g.addColorStop(0,'#0f1720'); g.addColorStop(1,'#0b1018'); ctx.fillStyle=g; ctx.fillRect(0,0,PLAY_W,PLAY_H);
+    }
+    // spikes
+    if(hasImage(SPRITES.spikeTop)) ctx.drawImage(SPRITES.spikeTop,0,0,PLAY_W,SPIKE_H);
+    else { ctx.fillStyle='#2e3b4a'; ctx.fillRect(0,0,PLAY_W,SPIKE_H); ctx.fillStyle='#8fb3d2'; const sz=16; for(let i=0;i<PLAY_W;i+=sz){ ctx.beginPath(); ctx.moveTo(i,SPIKE_H); ctx.lineTo(i+sz*0.5,0); ctx.lineTo(i+sz,SPIKE_H); ctx.closePath(); ctx.fill(); } }
+
+    // platforms
+    for(const p of platforms){
+      let img=null; if(p.type===PLATFORM.NORMAL) img=SPRITES.platNormal; else if(p.type===PLATFORM.CONVEYOR) img=(p.convDir===1?SPRITES.platConvR:SPRITES.platConvL); else img=SPRITES.platJump;
+      if(hasImage(img)) ctx.drawImage(img,p.x,p.y,p.w,PLATFORM_H);
+      else {
+        if(p.type===PLATFORM.NORMAL) ctx.fillStyle='#4ac1d9'; else if(p.type===PLATFORM.CONVEYOR) ctx.fillStyle='#57d785'; else ctx.fillStyle='#e2b86c';
+        ctx.fillRect(p.x,p.y,p.w,PLATFORM_H);
+        if(p.type===PLATFORM.CONVEYOR){ ctx.fillStyle='rgba(0,0,0,0.18)'; for(let i=0;i<p.w;i+=18){ const cx=p.x+i+9; ctx.beginPath(); if(p.convDir===1){ ctx.moveTo(cx-6,p.y+4); ctx.lineTo(cx+6,p.y+8); ctx.lineTo(cx-6,p.y+12);} else { ctx.moveTo(cx+6,p.y+4); ctx.lineTo(cx-6,p.y+8); ctx.lineTo(cx+6,p.y+12);} ctx.closePath(); ctx.fill(); } }
+      }
+    }
+
+    // player
+    const facing=player.dir===-1?SPRITES.playerLeft:SPRITES.playerRight;
+    if(hasImage(facing)) ctx.drawImage(facing,Math.round(player.x),Math.round(player.y),player.w,player.h);
+    else { ctx.fillStyle='#e85d75'; ctx.fillRect(Math.round(player.x),Math.round(player.y),player.w,player.h); ctx.fillStyle='#fff'; const eyeX=Math.round(player.x+(player.dir===1?player.w-6:2)); ctx.fillRect(eyeX,Math.round(player.y+6),3,3); }
+
+    drawHUD();
+    if(state===STATE.TITLE) drawTitle();
+    else if(state===STATE.OVER) drawGameOver();
+    else if(state===STATE.WIN) drawWin();
+  }
+
+  function drawHUD(){
+    const x=PLAY_W,w=HUD_W,pad=16; ctx.fillStyle='#0c1219'; ctx.fillRect(x,0,w,H); ctx.fillStyle='#1c2a3a'; ctx.fillRect(x,0,2,H);
+    ctx.fillStyle='#9db4cc'; ctx.font='16px system-ui, sans-serif'; ctx.fillText('레벨',x+pad,40);
+    ctx.fillStyle='#dff1ff'; ctx.font='bold 36px system-ui, sans-serif'; ctx.fillText(level+'층',x+pad,80);
+    ctx.fillStyle='#9db4cc'; ctx.font='16px system-ui, sans-serif'; ctx.fillText('최고기록',x+pad,130);
+    ctx.fillStyle='#cfe7ff'; ctx.font='bold 28px system-ui, sans-serif'; ctx.fillText((best||0)+'층',x+pad,165);
+    ctx.fillStyle='#9db4cc'; ctx.font='14px system-ui, sans-serif'; ctx.fillText('다음 레벨까지',x+pad,210);
+    const t=clamp(timeInLevel/LVL_TIME,0,1); ctx.fillStyle='#1f2d3d'; ctx.fillRect(x+pad,222,w-pad*2,10); ctx.fillStyle='#4ba3ff'; ctx.fillRect(x+pad,222,(w-pad*2)*t,10);
+    ctx.fillStyle='#6f8aa6'; ctx.font='12px system-ui, sans-serif'; ctx.fillText('발판 속도: '+getRiseSpeed().toFixed(1)+'px/s',x+pad,H-18);
+  }
+
+  function drawTitle(){
+    ctx.save(); ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,PLAY_W,PLAY_H);
+    ctx.fillStyle='#e6f1ff'; ctx.font='bold 40px system-ui, sans-serif'; ctx.textAlign='center'; ctx.fillText('발판 밟고 내려가기',PLAY_W/2,PLAY_H/2-20);
+    ctx.fillStyle='#bcd8ff'; ctx.font='20px system-ui, sans-serif'; const a=0.5+0.5*Math.sin(performance.now()/400); ctx.globalAlpha=a; ctx.fillText('아무버튼이나 눌러 시작하세요',PLAY_W/2,PLAY_H/2+24); ctx.restore();
+  }
+  function drawGameOver(){ ctx.save(); ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,PLAY_W,PLAY_H); ctx.textAlign='center'; ctx.fillStyle='#ffd7dc'; ctx.font='bold 44px system-ui, sans-serif'; ctx.fillText(level+'층 도달',PLAY_W/2,PLAY_H/2-10); drawButton(retryBtn.x,retryBtn.y,retryBtn.w,retryBtn.h,'재도전'); ctx.restore(); }
+  function drawWin(){ ctx.save(); ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,PLAY_W,PLAY_H); ctx.textAlign='center'; ctx.fillStyle='#d8ffe0'; ctx.font='bold 44px system-ui, sans-serif'; ctx.fillText('축하합니다! 100층 클리어!',PLAY_W/2,PLAY_H/2-10); drawButton(retryBtn.x,retryBtn.y,retryBtn.w,retryBtn.h,'다시하기'); ctx.restore(); }
+  function drawButton(x,y,w,h,label){ ctx.save(); ctx.fillStyle='#1a2837'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#89b4ff'; ctx.lineWidth=2; ctx.strokeRect(x+1.5,y+1.5,w-3,h-3); ctx.fillStyle='#dfeeff'; ctx.font='bold 20px system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.restore(); }
+
+  // Loop
+  let last=performance.now();
+  function loop(now){
+    const dt=Math.min(0.033,(now-last)/1000); last=now;
+    if(state===STATE.TITLE){ if(KEYS.any){ startGame(); KEYS.any=false; } }
+    update(dt); draw(); requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Resize
+  function resize(){
+    const maxW=Math.min(window.innerWidth-24,1024); const maxH=Math.min(window.innerHeight-24,768);
+    const scale=Math.min(maxW/W,maxH/H); const w=Math.round(W*scale), h=Math.round(H*scale);
+    const frame=document.getElementById('frame'); frame.style.width=w+'px'; frame.style.height=h+'px';
+    canvas.style.width=w+'px'; canvas.style.height=h+'px';
+    PLATFORM_W=(PLAY_W/4)|0;
+  }
+  addEventListener('resize',resize); resize();
+})();
+// ==== End script ====
+</script>
+</body>
+</html>
