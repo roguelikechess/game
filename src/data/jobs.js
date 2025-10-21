@@ -1,0 +1,198 @@
+export const JOBS = [
+  {
+    id: 'swordsman',
+    name: '검사',
+    role: 'frontline',
+    description:
+      '날렵한 검사는 가장 앞에서 적에게 돌진하여 강력한 일격을 가하지만 방어는 약하다.',
+    baseStats: {
+      health: 720,
+      attack: 78,
+      defense: 30,
+      magicDefense: 22,
+      spellPower: 24,
+      mana: 60,
+      speed: 1.32,
+      attackInterval: 1.16,
+      range: 56,
+      manaRegen: 6,
+    },
+    behavior: {
+      type: 'charger',
+      engageRange: 60,
+      pursuitSpeed: 1.65,
+    },
+  },
+  {
+    id: 'knight',
+    name: '기사',
+    role: 'frontline',
+    description:
+      '기사는 방패와 갑옷으로 동료를 지키며 안정적인 화력을 유지하는 전열 탱커다.',
+    baseStats: {
+      health: 860,
+      attack: 64,
+      defense: 52,
+      magicDefense: 30,
+      spellPower: 28,
+      mana: 70,
+      speed: 1.14,
+      attackInterval: 1.4,
+      range: 58,
+      manaRegen: 5,
+    },
+    behavior: {
+      type: 'charger',
+      engageRange: 60,
+      pursuitSpeed: 1.4,
+    },
+  },
+  {
+    id: 'warrior',
+    name: '전사',
+    role: 'frontline',
+    description:
+      '전사는 압도적인 체력과 정신력으로 전열을 사수하며 안정적으로 적을 제압한다.',
+    baseStats: {
+      health: 980,
+      attack: 58,
+      defense: 66,
+      magicDefense: 28,
+      spellPower: 24,
+      mana: 80,
+      speed: 1.04,
+      attackInterval: 1.46,
+      range: 60,
+      manaRegen: 4,
+    },
+    behavior: {
+      type: 'charger',
+      engageRange: 62,
+      pursuitSpeed: 1.25,
+    },
+  },
+  {
+    id: 'archer',
+    name: '궁수',
+    role: 'midline',
+    description:
+      '궁수는 거리를 유지하며 단일 대상에게 치명적인 화살을 쏘아 올린다.',
+    baseStats: {
+      health: 580,
+      attack: 90,
+      defense: 30,
+      magicDefense: 34,
+      spellPower: 42,
+      mana: 70,
+      speed: 1.16,
+      attackInterval: 1.7,
+      range: 260,
+      manaRegen: 8,
+    },
+    behavior: {
+      type: 'skirmisher',
+      preferredRange: 220,
+      retreatRange: 150,
+    },
+  },
+  {
+    id: 'mage',
+    name: '마법사',
+    role: 'midline',
+    description:
+      '마법사는 적이 접근하면 거리를 벌리며 광역 주문으로 전장을 지배한다.',
+    baseStats: {
+      health: 560,
+      attack: 52,
+      defense: 26,
+      magicDefense: 46,
+      spellPower: 128,
+      mana: 120,
+      speed: 1.24,
+      attackInterval: 1.74,
+      range: 220,
+      manaRegen: 12,
+    },
+    behavior: {
+      type: 'skirmisher',
+      preferredRange: 200,
+      retreatRange: 150,
+    },
+  },
+  {
+    id: 'healer',
+    name: '치유사',
+    role: 'backline',
+    description:
+      '치유사는 뒤에서 동료의 상처를 보살피고 필요한 순간 회복을 폭발시킨다.',
+    baseStats: {
+      health: 560,
+      attack: 48,
+      defense: 30,
+      magicDefense: 48,
+      spellPower: 118,
+      mana: 150,
+      speed: 1.02,
+      attackInterval: 1.84,
+      range: 210,
+      manaRegen: 15,
+    },
+    behavior: {
+      type: 'support',
+      supportStyle: 'heal',
+      retreatRange: 160,
+    },
+  },
+  {
+    id: 'consecrator',
+    name: '축성사',
+    role: 'backline',
+    description:
+      '축성사는 아군을 축복하여 전투력을 끌어올리고 방어선을 단단히 만든다.',
+    baseStats: {
+      health: 580,
+      attack: 52,
+      defense: 34,
+      magicDefense: 44,
+      spellPower: 114,
+      mana: 140,
+      speed: 1.04,
+      attackInterval: 1.78,
+      range: 200,
+      manaRegen: 13,
+    },
+    behavior: {
+      type: 'support',
+      supportStyle: 'buff',
+      retreatRange: 160,
+    },
+  },
+  {
+    id: 'warlock',
+    name: '저주술사',
+    role: 'backline',
+    description:
+      '저주술사는 적에게 약화의 그림자를 드리우고 지속적인 피해를 입힌다.',
+    baseStats: {
+      health: 570,
+      attack: 60,
+      defense: 28,
+      magicDefense: 52,
+      spellPower: 134,
+      mana: 160,
+      speed: 1.06,
+      attackInterval: 1.86,
+      range: 215,
+      manaRegen: 14,
+    },
+    behavior: {
+      type: 'support',
+      supportStyle: 'debuff',
+      retreatRange: 170,
+    },
+  },
+];
+
+export function getJobById(jobId) {
+  return JOBS.find((job) => job.id === jobId) || null;
+}

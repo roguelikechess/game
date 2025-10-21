@@ -1,0 +1,403 @@
+import { getTooltip } from './tooltip.js';
+import { formatLevelBadge } from './identity.js';
+import {
+  ITEM_BLUEPRINTS,
+  computeItemEffectValues,
+  getItemEnhanceCost,
+  getItemSellValue,
+} from '../game/items.js';
+
+const ROLE_LABELS = {
+  frontline: '전열',
+  midline: '중열',
+  backline: '후열',
+};
+
+const RARITY_LABELS = {
+  common: '커먼',
+  uncommon: '언커먼',
+  rare: '레어',
+  unique: '유니크',
+  epic: '에픽',
+};
+
+const ITEM_TYPE_LABELS = {
+  weapon: '무기',
+  armor: '방어구',
+  accessory: '장신구',
+};
+
+const STAT_LABELS = {
+  attack: '공격력',
+  defense: '방어력',
+  magicDefense: '마법 방어력',
+  spellPower: '주문력',
+  maxHealth: '체력',
+  maxMana: '마나',
+  mana: '마나',
+  range: '사거리',
+};
+
+const STAT_ICONS = {
+  maxHealth: '❤️',
+  health: '❤️',
+  attack: '🗡️',
+  defense: '🛡️',
+  magicDefense: '🔮',
+  spellPower: '✨',
+  maxMana: '🔷',
+  mana: '🔷',
+  speed: '💨',
+  attackInterval: '⏱️',
+  range: '🎯',
+  manaRegen: '🔁',
+};
+
+const MODIFIER_LABELS = {
+  attackIntervalMultiplier: '공격 속도 배율',
+  speed: '이동 속도',
+  manaRegen: '마나 회복',
+  cooldownReduction: '쿨타임 감소',
+};
+
+function formatStat(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return typeof value === 'number' ? Math.round(value) : value;
+}
+
+function formatDecimal(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return value;
+  }
+  return value.toFixed(2);
+}
+
+function pickStatValue(source, key, fallback = []) {
+  if (!source) {
+    return null;
+  }
+  if (Object.prototype.hasOwnProperty.call(source, key) && source[key] != null) {
+    return source[key];
+  }
+  for (const altKey of fallback) {
+    if (Object.prototype.hasOwnProperty.call(source, altKey) && source[altKey] != null) {
+      return source[altKey];
+    }
+  }
+  return null;
+}
+
+function formatValueByType(value, type = 'int') {
+  if (value == null || Number.isNaN(Number(value))) {
+    return null;
+  }
+  if (type === 'decimal') {
+    const raw = formatDecimal(Number(value));
+    if (raw == null) {
+      return null;
+    }
+    return String(raw).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  }
+  const rounded = formatStat(Number(value));
+  return rounded == null ? null : String(rounded);
+}
+
+function formatSignedDifference(diff, type = 'int') {
+  if (diff == null || Number.isNaN(Number(diff))) {
+    return null;
+  }
+  const magnitude = formatValueByType(Math.abs(diff), type);
+  if (!magnitude) {
+    return null;
+  }
+  return `${diff >= 0 ? '+' : '-'}${magnitude}`;
+}
+
+function formatScalingPercent(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return null;
+  }
+  const percent = value * 100;
+  const abs = Math.abs(percent);
+  let decimals = 0;
+  if (abs < 1) {
+    decimals = 2;
+  } else if (abs < 10) {
+    decimals = 1;
+  }
+  return `${percent.toFixed(decimals).replace(/\.0+$/, '')}%`;
+}
+
+function describeSpellScaling(scaling) {
+  if (!scaling || typeof scaling !== 'object') {
+    return [];
+  }
+  const lines = [];
+  if (scaling.damage) {
+    const percent = formatScalingPercent(scaling.damage);
+    if (percent) {
+      lines.push(`피해: 주문력 × ${percent} 추가`);
+    }
+  }
+  if (scaling.heal) {
+    const percent = formatScalingPercent(scaling.heal);
+    if (percent) {
+      lines.push(`회복: 주문력 × ${percent} 추가`);
+    }
+  }
+  if (scaling.shield) {
+    const percent = formatScalingPercent(scaling.shield);
+    if (percent) {
+      lines.push(`보호막: 주문력 × ${percent} 추가`);
+    }
+  }
+  if (scaling.mana) {
+    const percent = formatScalingPercent(scaling.mana);
+    if (percent) {
+      lines.push(`마나 효과: 주문력 × ${percent} 추가`);
+    }
+  }
+  if (scaling.effect) {
+    const percent = formatScalingPercent(scaling.effect);
+    if (percent) {
+      lines.push(`효과 배율: 주문력 1당 ${percent} 증가`);
+    }
+  }
+  if (scaling.duration) {
+    const percent = formatScalingPercent(scaling.duration);
+    if (percent) {
+      lines.push(`지속시간: 주문력 1당 ${percent} 증가`);
+    }
+  }
+  return lines;
+}
+
+function formatComparison(entry, baseValue, totalValue) {
+  const { type = 'int', suffix = '' } = entry;
+  const baseText = formatValueByType(baseValue, type);
+  const totalText = formatValueByType(totalValue, type);
+
+  if (baseText == null && totalText == null) {
+    return null;
+  }
+
+  if (baseText != null && totalText != null) {
+    const baseLabel = `${baseText}${suffix} (기본)`;
+    const totalLabel = `${totalText}${suffix} (강화)`;
+    const baseNumber = Number(baseValue);
+    const totalNumber = Number(totalValue);
+    const diff = formatSignedDifference(totalNumber - baseNumber, type);
+    const epsilon = type === 'decimal' ? 0.005 : 0.5;
+    if (!diff || Math.abs(totalNumber - baseNumber) < epsilon) {
+      return `${totalText}${suffix} (기본=강화)`;
+    }
+    return `${baseLabel} → ${totalLabel} (${diff})`;
+  }
+
+  const text = totalText ?? baseText;
+  return text ? `${text}${suffix}` : null;
+}
+
+export function attachTooltip(element, getContent, options = {}) {
+  const tooltip = getTooltip();
+  if (!tooltip || !element) {
+    return;
+  }
+
+  const { anchor = 'cursor' } = options;
+
+  function getAnchorPosition() {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height,
+    };
+  }
+
+  element.addEventListener('mouseenter', (event) => {
+    const content = typeof getContent === 'function' ? getContent() : null;
+    if (!content) {
+      return;
+    }
+    if (anchor === 'element') {
+      tooltip.show(content, getAnchorPosition());
+      return;
+    }
+    tooltip.show(content, { x: event.clientX, y: event.clientY });
+  });
+
+  element.addEventListener('mousemove', (event) => {
+    if (anchor === 'element') {
+      tooltip.position(getAnchorPosition());
+      return;
+    }
+    tooltip.position({ x: event.clientX, y: event.clientY });
+  });
+
+  element.addEventListener('mouseleave', () => {
+    tooltip.hide();
+  });
+}
+
+export function buildUnitTooltip({
+  name,
+  jobName,
+  role,
+  rarity,
+  level,
+  stats = {},
+  baseStats = null,
+  skill,
+  items = [],
+  extraLines = [],
+}) {
+  const lines = [];
+  if (name) {
+    lines.push(name);
+  }
+  if (jobName || role || rarity) {
+    const parts = [];
+    if (jobName) {
+      parts.push(jobName);
+    }
+    if (role) {
+      parts.push(ROLE_LABELS[role] || role);
+    }
+    if (rarity) {
+      parts.push(`희귀도: ${RARITY_LABELS[rarity] || rarity}`);
+    }
+    if (parts.length) {
+      lines.push(parts.join(' · '));
+    }
+  }
+  if (level != null) {
+    const levelInfo = formatLevelBadge(level);
+    lines.push(`레벨: ${levelInfo.label}`);
+  }
+  const STAT_DETAILS = [
+    { key: 'maxHealth', fallback: ['health'], label: '체력', type: 'int' },
+    { key: 'attack', label: '공격력', type: 'int' },
+    { key: 'defense', label: '방어력', type: 'int' },
+    { key: 'magicDefense', label: '마법 방어력', type: 'int' },
+    { key: 'spellPower', label: '주문력', type: 'int' },
+    { key: 'maxMana', fallback: ['mana'], label: '마나', type: 'int' },
+    { key: 'attackInterval', label: '공격 간격', type: 'decimal', suffix: 's' },
+    { key: 'speed', label: '이동 속도', type: 'decimal' },
+    { key: 'range', label: '사거리', type: 'int' },
+    { key: 'manaRegen', label: '마나 회복', type: 'decimal' },
+  ];
+
+  const statLines = STAT_DETAILS.map((entry) => {
+    const baseValue = pickStatValue(baseStats, entry.key, entry.fallback);
+    const totalValue = pickStatValue(stats, entry.key, entry.fallback);
+    if (baseValue == null && totalValue == null) {
+      return null;
+    }
+    const emoji = STAT_ICONS[entry.key] || STAT_ICONS[entry.fallback?.[0]] || '';
+    const formatted = formatComparison(entry, baseValue, totalValue);
+    if (!formatted) {
+      return null;
+    }
+    const label = entry.label || STAT_LABELS[entry.key] || entry.key;
+    return `${emoji ? `${emoji} ` : ''}${label}: ${formatted}`;
+  }).filter(Boolean);
+
+  lines.push(...statLines);
+  if (skill?.name) {
+    lines.push(`스킬: ${skill.name}`);
+    if (skill.description) {
+      lines.push(skill.description);
+    }
+    const scalingDetails = describeSpellScaling(skill.spellPowerScaling);
+    if (scalingDetails.length) {
+      lines.push('주문력 계수:');
+      scalingDetails.forEach((entry) => {
+        lines.push(` - ${entry}`);
+      });
+    }
+    const cooldownText = formatDecimal(skill.cooldown);
+    if (cooldownText != null) {
+      const trimmed = typeof cooldownText === 'string'
+        ? cooldownText.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+        : cooldownText;
+      lines.push(`스킬 쿨타임: ${trimmed}초`);
+    }
+    const manaCost = skill.manaCost ?? skill.effect?.manaCost ?? null;
+    if (manaCost != null) {
+      const numericCost = Number(manaCost);
+      lines.push(`소모 마나: ${numericCost > 0 ? Math.round(numericCost) : '없음'}`);
+    }
+  }
+  if (Array.isArray(items) && items.length) {
+    lines.push(`장비: ${items.join(', ')}`);
+  }
+  if (extraLines.length) {
+    lines.push(...extraLines);
+  }
+  return lines.join('\n');
+}
+
+export function buildItemTooltip(item) {
+  if (!item) {
+    return null;
+  }
+  const blueprint = ITEM_BLUEPRINTS[item.blueprintId];
+  const rarity = item.rarity || 'common';
+  const rarityLabel = RARITY_LABELS[rarity] || rarity;
+  const upgradeLevel = Number(item.upgradeLevel) || 0;
+  const lines = [];
+
+  const itemName = blueprint?.name || '알 수 없는 장비';
+  lines.push(`${rarityLabel} ${itemName}`);
+
+  if (upgradeLevel > 0) {
+    lines.push(`강화 단계: +${upgradeLevel}`);
+  }
+
+  if (blueprint?.type) {
+    const typeLabel = ITEM_TYPE_LABELS[blueprint.type] || blueprint.type;
+    lines.push(`종류: ${typeLabel}`);
+  }
+
+  if (blueprint?.slot) {
+    lines.push(`슬롯: ${blueprint.slot}`);
+  }
+
+  const { stats, modifiers } = computeItemEffectValues(item.blueprintId, rarity, upgradeLevel);
+
+  Object.entries(stats).forEach(([statKey, value]) => {
+    if (value == null) {
+      return;
+    }
+    const label = STAT_LABELS[statKey] || statKey;
+    const prefix = value >= 0 ? '+' : '';
+    const formatted = Number.isInteger(value) ? value : value.toFixed(1);
+    lines.push(`${label}: ${prefix}${formatted}`);
+  });
+
+  Object.entries(modifiers).forEach(([modifierKey, value]) => {
+    if (value == null) {
+      return;
+    }
+    const label = MODIFIER_LABELS[modifierKey] || modifierKey;
+    if (modifierKey === 'attackIntervalMultiplier') {
+      lines.push(`${label}: ×${value.toFixed(2)}`);
+    } else if (modifierKey === 'cooldownReduction') {
+      lines.push(`${label}: ${Math.round(value * 100)}%`);
+    } else {
+      const prefix = value >= 0 ? '+' : '';
+      const formatted = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value;
+      lines.push(`${label}: ${prefix}${formatted}`);
+    }
+  });
+
+  lines.push(`판매 가치: ${getItemSellValue(item)} 골드`);
+  lines.push(`다음 강화 비용: ${getItemEnhanceCost(item)} 골드`);
+
+  return lines.join('\n');
+}
