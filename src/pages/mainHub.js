@@ -324,8 +324,13 @@ function createAudioSelect(label, options, selectedId, onChange) {
     }
     select.appendChild(option);
   });
+  if (options.length > 0) {
+    select.value = selectedId || options[0].id;
+  }
   select.addEventListener('change', (event) => {
-    onChange(event.target.value);
+    if (typeof onChange === 'function') {
+      onChange(event.target.value);
+    }
   });
   wrapper.appendChild(select);
   return wrapper;

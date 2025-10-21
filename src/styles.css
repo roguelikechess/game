@@ -638,7 +638,7 @@ a {
 }
 
 .shop-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .upgrade-grid {
@@ -1728,8 +1728,8 @@ a {
 }
 
 .shop-card {
-  max-width: 760px;
-  width: min(95%, 760px);
+  max-width: 960px;
+  width: min(95%, 960px);
   max-height: 85%;
   overflow-y: auto;
 }

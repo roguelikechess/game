@@ -63,7 +63,7 @@ function randomUnit(weights) {
 
 export function generateShop(run) {
   const weights = getWeightsForRun(run);
-  return Array.from({ length: 3 }, () => {
+  return Array.from({ length: 4 }, () => {
     const unit = randomUnit(weights);
     const cost = RARITY_COST[unit.rarity] || BASE_COST;
     return {
