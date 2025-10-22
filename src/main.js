@@ -312,6 +312,16 @@ function loadPersistedState() {
         battle: BATTLE_BGM[0]?.id || null,
         effects: EFFECT_SETS[0]?.id || null,
       },
+      audioSettings: {
+        musicVolume: (() => {
+          const saved = Number(parsed.audioSettings?.musicVolume);
+          if (!Number.isFinite(saved)) {
+            return 0.8;
+          }
+          return Math.max(0, Math.min(1, saved));
+        })(),
+        musicMuted: !!parsed.audioSettings?.musicMuted,
+      },
       battleSpeed: parsed.battleSpeed || 1,
       pendingAugmentChoices: Array.isArray(parsed.pendingAugmentChoices)
         ? parsed.pendingAugmentChoices
@@ -338,6 +348,7 @@ function persistState() {
     shopLocked: state.shopLocked,
     summaryVisible: state.summaryVisible,
     audioSelection: state.audioSelection,
+    audioSettings: state.audioSettings,
     battleSpeed: state.battleSpeed,
     pendingAugmentChoices: state.pendingAugmentChoices,
     activeAugmentChoice: state.activeAugmentChoice,
@@ -402,6 +413,10 @@ const state = {
     battle: BATTLE_BGM[0]?.id || null,
     effects: EFFECT_SETS[0]?.id || null,
   },
+  audioSettings: {
+    musicVolume: 0.8,
+    musicMuted: false,
+  },
 };
 
 const persisted = loadPersistedState();
@@ -415,6 +430,7 @@ if (persisted) {
   state.shopLocked = !!persisted.shopLocked;
   state.summaryVisible = !!persisted.summaryVisible && !!persisted.lastOutcome;
   state.audioSelection = persisted.audioSelection;
+  state.audioSettings = persisted.audioSettings;
   state.battleSpeed = persisted.battleSpeed;
   state.pendingAugmentChoices = Array.isArray(persisted.pendingAugmentChoices)
     ? persisted.pendingAugmentChoices
@@ -1178,6 +1194,20 @@ function handleShowOutcome() {
   renderApp();
 }
 
+function clampMusicVolume(value) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, value));
+}
+
+function applyAudioSettings(settings) {
+  const volume = clampMusicVolume(settings?.musicVolume ?? state.audioSettings.musicVolume);
+  const muted = !!settings?.musicMuted;
+  audioManager.setMusicVolume(volume);
+  audioManager.setMusicMuted(muted);
+}
+
 function applyAudioSelection(selection) {
   if (selection.lobby) {
     audioManager.setLobbyTrack(selection.lobby);
@@ -1198,6 +1228,30 @@ function handleAudioChange(kind, value) {
   }
   persistState();
   renderApp();
+}
+
+function handleAudioSettingsChange(changes, options = {}) {
+  if (!changes || typeof changes !== 'object') {
+    return;
+  }
+  const next = { ...state.audioSettings };
+  if (Object.prototype.hasOwnProperty.call(changes, 'musicVolume')) {
+    next.musicVolume = clampMusicVolume(changes.musicVolume);
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'musicMuted')) {
+    next.musicMuted = !!changes.musicMuted;
+  }
+  state.audioSettings = next;
+  applyAudioSettings(next);
+  if (!state.runState.gameOver && !next.musicMuted && state.view === 'main') {
+    audioManager.playLobby();
+  }
+  if (options.persist !== false) {
+    persistState();
+  }
+  if (options.render !== false) {
+    renderApp();
+  }
 }
 
 function restartRun() {
@@ -1322,6 +1376,8 @@ function renderContent() {
       effects: { tracks: EFFECT_SETS, selected: state.audioSelection.effects },
     },
     onAudioChange: handleAudioChange,
+    audioSettings: state.audioSettings,
+    onAudioSettingsChange: handleAudioSettingsChange,
     lastOutcome: state.lastOutcome,
     upcomingEncounter: state.nextEncounter,
     onDismissOutcome: handleDismissOutcome,
@@ -1386,5 +1442,6 @@ if (state.nextEncounter) {
 refreshPendingUpgrades();
 renderApp();
 applyAudioSelection(state.audioSelection);
+applyAudioSettings(state.audioSettings);
 audioManager.playLobby();
 persistState();

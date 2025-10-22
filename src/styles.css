@@ -638,7 +638,7 @@ a {
 }
 
 .shop-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .upgrade-grid {
@@ -1728,8 +1728,8 @@ a {
 }
 
 .shop-card {
-  max-width: 760px;
-  width: min(95%, 760px);
+  max-width: 960px;
+  width: min(95%, 960px);
   max-height: 85%;
   overflow-y: auto;
 }
@@ -1818,6 +1818,29 @@ a {
   border-radius: 0.6rem;
   border: 1px solid rgba(99, 112, 143, 0.25);
   background: #f7f9ff;
+}
+
+.audio-music-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.audio-volume-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.audio-volume-control input[type='range'] {
+  width: 100%;
+}
+
+.audio-volume-label {
+  font-weight: 600;
+  color: #2f3b57;
 }
 
 .status-banner {

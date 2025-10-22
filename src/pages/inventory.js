@@ -18,7 +18,7 @@ function createUnitPanel(unit, options) {
   const { onEquip, onUnequip, trackPanel } = options;
   const definition = getUnitDefinition(unit.definitionId);
   const job = definition?.jobId ? getJobById(definition.jobId) : null;
-  const capacity = getItemCapacityForUnit(definition);
+  const capacity = getItemCapacityForUnit(definition, { level: unit.level });
 
   const card = el('div', { className: 'inventory-unit-card' });
   card.dataset.instanceId = unit.instanceId;

@@ -562,9 +562,9 @@ function scalingForRound(round) {
   const safeRound = Math.max(1, Math.floor(Number(round) || 1));
   const stage = safeRound - 1;
   const bossClears = Math.max(0, Math.floor(stage / 10));
-  const growth = 0.06 + bossClears * 0.018;
-  const base = 0.45 + stage * growth;
-  const cap = 2.2 + bossClears * 0.28;
+  const growth = 0.045 + bossClears * 0.012;
+  const base = 0.48 + stage * growth;
+  const cap = 2 + bossClears * 0.24;
   return Math.min(cap, base);
 }
 
@@ -595,8 +595,11 @@ function generateStandardEnemies(allyCount, round, overrideScaling = null) {
   } else {
     desired += Math.floor((round - 3) / 2) + 1;
   }
-  const maxEnemies = 9 + Math.floor(round / 6);
-  desired = Math.min(desired, maxEnemies);
+  const naturalCap = 9 + Math.floor(round / 6);
+  const earlyCap = 6;
+  const postFiftyBonus = round > 50 ? Math.floor((round - 50) / 4) : 0;
+  const dynamicCap = round <= 50 ? earlyCap : Math.min(naturalCap, earlyCap + postFiftyBonus);
+  desired = Math.min(desired, Math.max(earlyCap, dynamicCap));
 
   const distribution = [1, desired > 1 ? 1 : 0, desired > 2 ? 1 : 0];
   let remaining = Math.max(0, desired - distribution.reduce((sum, value) => sum + value, 0));

@@ -28,7 +28,7 @@ export const ITEM_BLUEPRINTS = {
     slot: 'hand',
     lootWeight: 1.1,
     statBonuses: {
-      attack: { common: 28, uncommon: 44, rare: 66, unique: 94, epic: 132 },
+      attack: { common: 28, uncommon: 48, rare: 74, unique: 108, epic: 152 },
     },
   },
   'echo-blades': {
@@ -37,11 +37,11 @@ export const ITEM_BLUEPRINTS = {
     slot: 'hand',
     lootWeight: 0.9,
     statBonuses: {
-      attack: { common: 20, uncommon: 32, rare: 48, unique: 68, epic: 94 },
+      attack: { common: 20, uncommon: 38, rare: 60, unique: 86, epic: 120 },
       range: { common: 22, uncommon: 34, rare: 52, unique: 72, epic: 96 },
     },
     modifiers: {
-      attackIntervalMultiplier: { common: 0.9, uncommon: 0.86, rare: 0.8, unique: 0.72, epic: 0.62 },
+      attackIntervalMultiplier: { common: 0.98, uncommon: 0.92, rare: 0.88, unique: 0.84, epic: 0.8 },
     },
   },
   'astral-staff': {
@@ -50,7 +50,7 @@ export const ITEM_BLUEPRINTS = {
     slot: 'hand',
     lootWeight: 1,
     statBonuses: {
-      spellPower: { common: 32, uncommon: 48, rare: 72, unique: 104, epic: 144 },
+      spellPower: { common: 32, uncommon: 56, rare: 84, unique: 122, epic: 170 },
       mana: { common: 22, uncommon: 34, rare: 50, unique: 72, epic: 98 },
     },
   },
@@ -347,15 +347,21 @@ export function applyItemBonuses(baseStats = {}, items = []) {
   return { stats: applied, modifiers };
 }
 
-export function getItemCapacityForUnit(definition) {
+export function getItemCapacityForUnit(definition, context = {}) {
   const rarity = definition?.rarity || 'common';
+  let capacity;
   if (rarity === 'epic') {
-    return 4;
+    capacity = 4;
+  } else if (rarity === 'rare' || rarity === 'unique') {
+    capacity = 3;
+  } else {
+    capacity = 2;
   }
-  if (rarity === 'rare' || rarity === 'unique') {
-    return 3;
+  const level = context.level ?? context.unit?.level ?? null;
+  if (typeof level === 'number' && level >= 4) {
+    capacity += 1;
   }
-  return 2;
+  return capacity;
 }
 
 export function createItemInstance(blueprintId, rarity = 'common') {
