@@ -287,58 +287,59 @@ function applyAugmentToRun(run, augmentId, tier) {
   return { ...run, augments };
 }
 
+function hydratePersistedState(parsed) {
+  const runState = sanitizeRunState(parsed?.runState);
+  return {
+    runState,
+    shopOfferings: Array.isArray(parsed?.shopOfferings) ? parsed.shopOfferings : generateShop(runState),
+    lastOutcome: parsed?.lastOutcome || null,
+    nextEncounter: parsed?.nextEncounter || null,
+    shopVisible: parsed?.shopVisible !== undefined ? parsed.shopVisible : true,
+    shopReady: parsed?.shopReady !== undefined ? parsed.shopReady : true,
+    shopLocked: !!parsed?.shopLocked,
+    summaryVisible: parsed?.summaryVisible || false,
+    audioSelection: parsed?.audioSelection || {
+      lobby: LOBBY_BGM[0]?.id || null,
+      battle: BATTLE_BGM[0]?.id || null,
+      effects: EFFECT_SETS[0]?.id || null,
+    },
+    audioSettings: {
+      musicVolume: (() => {
+        const saved = Number(parsed?.audioSettings?.musicVolume);
+        if (!Number.isFinite(saved)) {
+          return 0.8;
+        }
+        return Math.max(0, Math.min(1, saved));
+      })(),
+      musicMuted: !!parsed?.audioSettings?.musicMuted,
+    },
+    battleSpeed: parsed?.battleSpeed || 1,
+    pendingAugmentChoices: Array.isArray(parsed?.pendingAugmentChoices)
+      ? parsed.pendingAugmentChoices
+      : [],
+    activeAugmentChoice: parsed?.activeAugmentChoice || null,
+  };
+}
+
 function loadPersistedState() {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
   }
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (!stored) {
+    return null;
+  }
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return null;
-    }
     const parsed = JSON.parse(stored);
-    const runState = sanitizeRunState(parsed.runState);
-    return {
-      runState,
-      shopOfferings: Array.isArray(parsed.shopOfferings) ? parsed.shopOfferings : generateShop(runState),
-      lastOutcome: parsed.lastOutcome || null,
-      nextEncounter: parsed.nextEncounter || null,
-      shopVisible: parsed.shopVisible !== undefined ? parsed.shopVisible : true,
-      shopReady: parsed.shopReady !== undefined ? parsed.shopReady : true,
-      shopLocked: !!parsed.shopLocked,
-      summaryVisible: parsed.summaryVisible || false,
-      audioSelection: parsed.audioSelection || {
-        lobby: LOBBY_BGM[0]?.id || null,
-        battle: BATTLE_BGM[0]?.id || null,
-        effects: EFFECT_SETS[0]?.id || null,
-      },
-      audioSettings: {
-        musicVolume: (() => {
-          const saved = Number(parsed.audioSettings?.musicVolume);
-          if (!Number.isFinite(saved)) {
-            return 0.8;
-          }
-          return Math.max(0, Math.min(1, saved));
-        })(),
-        musicMuted: !!parsed.audioSettings?.musicMuted,
-      },
-      battleSpeed: parsed.battleSpeed || 1,
-      pendingAugmentChoices: Array.isArray(parsed.pendingAugmentChoices)
-        ? parsed.pendingAugmentChoices
-        : [],
-      activeAugmentChoice: parsed.activeAugmentChoice || null,
-    };
+    return hydratePersistedState(parsed);
   } catch (error) {
     console.warn('Failed to load saved state', error);
     return null;
   }
 }
 
-function persistState() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return;
-  }
-  const payload = {
+function createPersistedPayload() {
+  return {
     runState: state.runState,
     shopOfferings: state.shopOfferings,
     lastOutcome: state.lastOutcome,
@@ -353,6 +354,13 @@ function persistState() {
     pendingAugmentChoices: state.pendingAugmentChoices,
     activeAugmentChoice: state.activeAugmentChoice,
   };
+}
+
+function persistState() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  const payload = createPersistedPayload();
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -365,6 +373,59 @@ function clearPersistedState() {
     return;
   }
   window.localStorage.removeItem(STORAGE_KEY);
+}
+
+function base64EncodeString(input) {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  if (typeof window.TextEncoder === 'function') {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(input);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index]);
+    }
+    return window.btoa(binary);
+  }
+  // Fallback for older browsers without TextEncoder.
+  if (typeof window.encodeURIComponent === 'function' && typeof window.unescape === 'function') {
+    return window.btoa(window.unescape(window.encodeURIComponent(input)));
+  }
+  return window.btoa(input);
+}
+
+function base64DecodeString(encoded) {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const sanitized = (encoded || '').replace(/\s+/g, '');
+  const binary = window.atob(sanitized);
+  if (typeof window.TextDecoder === 'function') {
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new TextDecoder().decode(bytes);
+  }
+  const percentEncoded = Array.from(binary)
+    .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+    .join('');
+  if (typeof decodeURIComponent === 'function') {
+    return decodeURIComponent(percentEncoded);
+  }
+  return binary;
+}
+
+function encodePayloadToShareString(payload) {
+  const json = JSON.stringify(payload);
+  return base64EncodeString(json);
+}
+
+function decodeSharedStringToPayload(encoded) {
+  const json = base64DecodeString(encoded);
+  const parsed = JSON.parse(json);
+  return hydratePersistedState(parsed);
 }
 
 function ensureNextEncounter(force = false) {
@@ -419,23 +480,35 @@ const state = {
   },
 };
 
+function applyPersistedStateSnapshot(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  state.runState = snapshot.runState;
+  state.shopOfferings = snapshot.shopOfferings;
+  state.lastOutcome = snapshot.lastOutcome;
+  state.nextEncounter = snapshot.nextEncounter;
+  state.shopVisible = snapshot.shopVisible;
+  state.shopReady = snapshot.shopReady;
+  state.shopLocked = !!snapshot.shopLocked;
+  state.summaryVisible = !!snapshot.summaryVisible && !!snapshot.lastOutcome;
+  state.audioSelection = snapshot.audioSelection;
+  state.audioSettings = snapshot.audioSettings;
+  state.battleSpeed = snapshot.battleSpeed;
+  state.pendingAugmentChoices = Array.isArray(snapshot.pendingAugmentChoices)
+    ? snapshot.pendingAugmentChoices
+    : [];
+  state.activeAugmentChoice = snapshot.activeAugmentChoice || null;
+  state.view = 'main';
+  state.activeBattle = null;
+  state.pendingBattleResult = null;
+  state.pendingUpgrades = [];
+  state.activeUpgrade = null;
+}
+
 const persisted = loadPersistedState();
 if (persisted) {
-  state.runState = persisted.runState;
-  state.shopOfferings = persisted.shopOfferings;
-  state.lastOutcome = persisted.lastOutcome;
-  state.nextEncounter = persisted.nextEncounter;
-  state.shopVisible = persisted.shopVisible;
-  state.shopReady = persisted.shopReady;
-  state.shopLocked = !!persisted.shopLocked;
-  state.summaryVisible = !!persisted.summaryVisible && !!persisted.lastOutcome;
-  state.audioSelection = persisted.audioSelection;
-  state.audioSettings = persisted.audioSettings;
-  state.battleSpeed = persisted.battleSpeed;
-  state.pendingAugmentChoices = Array.isArray(persisted.pendingAugmentChoices)
-    ? persisted.pendingAugmentChoices
-    : [];
-  state.activeAugmentChoice = persisted.activeAugmentChoice || null;
+  applyPersistedStateSnapshot(persisted);
 }
 
 const root = document.getElementById('root');
@@ -1278,6 +1351,61 @@ function restartRun() {
   audioManager.playLobby();
 }
 
+async function handleExportProgress() {
+  try {
+    if (!state.runState) {
+      window.alert('내보낼 진행도가 없습니다.');
+      return;
+    }
+    const payload = createPersistedPayload();
+    const shareCode = encodePayloadToShareString(payload);
+    let copied = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareCode);
+        copied = true;
+      } catch (clipboardError) {
+        console.warn('Failed to copy progress code to clipboard', clipboardError);
+      }
+    }
+    if (copied) {
+      window.prompt(
+        '진행도 코드가 클립보드에 복사되었습니다. 필요하면 아래 내용을 다시 복사하세요.',
+        shareCode
+      );
+      return;
+    }
+    window.prompt('아래 진행도 코드를 복사해 보관하세요.', shareCode);
+  } catch (error) {
+    console.error('Failed to export progress', error);
+    window.alert('진행도 내보내기에 실패했습니다. 잠시 후 다시 시도해주세요.');
+  }
+}
+
+function handleImportProgress() {
+  const input = window.prompt('불러올 진행도 코드를 붙여넣으세요.');
+  if (!input) {
+    return;
+  }
+  try {
+    const snapshot = decodeSharedStringToPayload(input.trim());
+    applyPersistedStateSnapshot(snapshot);
+    refreshPendingUpgrades();
+    ensureNextEncounter(false);
+    applyAudioSelection(state.audioSelection);
+    applyAudioSettings(state.audioSettings);
+    persistState();
+    renderApp();
+    if (!state.audioSettings.musicMuted && !state.runState.gameOver) {
+      audioManager.playLobby();
+    }
+    window.alert('진행도가 성공적으로 불러와졌습니다!');
+  } catch (error) {
+    console.error('Failed to import progress', error);
+    window.alert('진행도 불러오기에 실패했습니다. 코드가 올바른지 확인해주세요.');
+  }
+}
+
 function handleNewGame() {
   if (window.confirm('새로운 게임을 시작하시겠습니까? 진행 중인 도전이 초기화됩니다.')) {
     restartRun();
@@ -1320,6 +1448,12 @@ function renderHeader() {
     nav.appendChild(button);
   });
   header.appendChild(nav);
+  const exportButton = el('button', { className: 'nav-button', text: '진행도 내보내기' });
+  exportButton.addEventListener('click', handleExportProgress);
+  nav.appendChild(exportButton);
+  const importButton = el('button', { className: 'nav-button', text: '진행도 불러오기' });
+  importButton.addEventListener('click', handleImportProgress);
+  nav.appendChild(importButton);
   const restartButton = el('button', { className: 'nav-button danger', text: '새 게임' });
   restartButton.addEventListener('click', handleNewGame);
   nav.appendChild(restartButton);
