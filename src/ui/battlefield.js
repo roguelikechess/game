@@ -922,7 +922,12 @@ export class BattlefieldRenderer {
     }
 
     if (typeof unit.maxMana === 'number' && unit.maxMana > 0) {
-      const manaPct = Math.max(0, Math.min(1, (unit.mana ?? unit.maxMana) / unit.maxMana));
+      const manaValue = typeof unit.mana === 'number'
+        ? unit.mana
+        : typeof unit.currentMana === 'number'
+          ? unit.currentMana
+          : 0;
+      const manaPct = Math.max(0, Math.min(1, manaValue / unit.maxMana));
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(barX, barY + barHeight + 2, barWidth, 4);
       ctx.fillStyle = '#4fa7ff';

@@ -356,6 +356,8 @@ export function createMainHubPage({
   onShowOutcome,
   audioOptions,
   onAudioChange,
+  audioSettings,
+  onAudioSettingsChange,
   lastOutcome,
   upcomingEncounter,
   onDismissOutcome,
@@ -453,6 +455,57 @@ export function createMainHubPage({
     );
     if (effectSelect) {
       audioCard.appendChild(effectSelect);
+    }
+
+    const musicSettings = {
+      volume: Math.round(Math.max(0, Math.min(1, audioSettings?.musicVolume ?? 0.8)) * 100),
+      muted: !!audioSettings?.musicMuted,
+    };
+
+    if (typeof onAudioSettingsChange === 'function') {
+      const controls = el('div', { className: 'audio-music-controls' });
+
+      const muteButton = el('button', {
+        className: `nav-button small${musicSettings.muted ? ' secondary' : ''}`,
+        text: musicSettings.muted ? 'BGM 켜기' : 'BGM 끄기',
+        type: 'button',
+      });
+      muteButton.addEventListener('click', () => {
+        onAudioSettingsChange({ musicMuted: !musicSettings.muted });
+      });
+      controls.appendChild(muteButton);
+
+      const volumeControl = el('label', { className: 'audio-volume-control' });
+      const volumeLabel = el('span', { className: 'audio-volume-label', text: `BGM 음량 ${musicSettings.volume}%` });
+      volumeControl.appendChild(volumeLabel);
+      const slider = el('input', {
+        type: 'range',
+        min: '0',
+        max: '100',
+        value: `${musicSettings.volume}`,
+        step: '1',
+      });
+      slider.addEventListener('input', (event) => {
+        const raw = Number(event.target.value);
+        if (!Number.isFinite(raw)) {
+          return;
+        }
+        const scaled = Math.max(0, Math.min(100, raw));
+        volumeLabel.textContent = `BGM 음량 ${Math.round(scaled)}%`;
+        onAudioSettingsChange({ musicVolume: scaled / 100 }, { render: false, persist: false });
+      });
+      slider.addEventListener('change', (event) => {
+        const raw = Number(event.target.value);
+        if (!Number.isFinite(raw)) {
+          return;
+        }
+        const scaled = Math.max(0, Math.min(100, raw));
+        onAudioSettingsChange({ musicVolume: scaled / 100 });
+      });
+      volumeControl.appendChild(slider);
+      controls.appendChild(volumeControl);
+
+      audioCard.appendChild(controls);
     }
 
     logCard.appendChild(audioCard);

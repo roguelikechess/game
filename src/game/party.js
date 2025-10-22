@@ -507,7 +507,7 @@ export function autoAssignItemToParty(party, item) {
   const candidates = listUnitsWithLocation(updated)
     .map((entry) => {
       const definition = getUnitDefinition(entry.unit.definitionId);
-      const capacity = getItemCapacityForUnit(definition);
+      const capacity = getItemCapacityForUnit(definition, { level: entry.unit?.level });
       const items = ensureItemArray(entry.unit);
       return {
         ...entry,
@@ -581,7 +581,7 @@ export function equipItemToUnit(party, instanceId, item) {
     return { party: updated, assignedTo: null, merges: [], error: 'unit-missing' };
   }
   const definition = getUnitDefinition(location.unit.definitionId);
-  const capacity = getItemCapacityForUnit(definition);
+  const capacity = getItemCapacityForUnit(definition, { level: location.unit?.level });
   const items = ensureItemArray(location.unit);
   if (items.length >= capacity) {
     return { party: updated, assignedTo: location.unit.instanceId, merges: [], error: 'capacity' };
@@ -675,7 +675,7 @@ export function upgradePartyUnits(party, { definitionId, level, targetInstanceId
   if (targetSlot?.unit) {
     upgradeStats(targetSlot.unit);
     const definition = getUnitDefinition(targetSlot.unit.definitionId);
-    const capacity = getItemCapacityForUnit(definition);
+    const capacity = getItemCapacityForUnit(definition, { level: targetSlot.unit?.level });
     const combinedItems = targetItems.concat(consumedItems);
     const keptItems = combinedItems.slice(0, capacity).map((item) => ({ ...item }));
     const overflowItems = combinedItems.slice(capacity).map((item) => ({ ...item }));

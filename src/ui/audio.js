@@ -6,10 +6,18 @@ function createAudioElement(src, loop = false, volume = 0.5) {
     const audio = new Audio(src);
     audio.loop = loop;
     audio.volume = volume;
+    audio._baseVolume = volume;
     return audio;
   } catch (err) {
     return null;
   }
+}
+
+function clampVolume(value) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, value));
 }
 
 function playElement(audio) {
@@ -45,6 +53,8 @@ export class AudioManager {
     this.currentEffectId = effectTracks[0]?.id || null;
     this.lobbyAudio = null;
     this.battleAudio = null;
+    this.musicVolume = 1;
+    this.musicMuted = false;
   }
 
   setLobbyTrack(id) {
@@ -90,6 +100,7 @@ export class AudioManager {
       stopElement(this.lobbyAudio);
       this.lobbyAudio = createAudioElement(track.src, true, 0.45);
     }
+    this.updateAudioVolume(this.lobbyAudio);
     stopElement(this.battleAudio);
     playElement(this.lobbyAudio);
   }
@@ -103,6 +114,7 @@ export class AudioManager {
       stopElement(this.battleAudio);
       this.battleAudio = createAudioElement(track.src, true, 0.5);
     }
+    this.updateAudioVolume(this.battleAudio);
     stopElement(this.lobbyAudio);
     playElement(this.battleAudio);
   }
@@ -140,5 +152,29 @@ export class AudioManager {
 
   stopAll() {
     this.stopBackground();
+  }
+
+  setMusicVolume(volume) {
+    this.musicVolume = clampVolume(volume);
+    this.applyMusicSettings();
+  }
+
+  setMusicMuted(muted) {
+    this.musicMuted = !!muted;
+    this.applyMusicSettings();
+  }
+
+  applyMusicSettings() {
+    this.updateAudioVolume(this.lobbyAudio);
+    this.updateAudioVolume(this.battleAudio);
+  }
+
+  updateAudioVolume(audio) {
+    if (!audio) {
+      return;
+    }
+    const baseVolume = Number.isFinite(audio._baseVolume) ? audio._baseVolume : audio.volume || 0.5;
+    const applied = this.musicMuted ? 0 : clampVolume(baseVolume * this.musicVolume);
+    audio.volume = applied;
   }
 }

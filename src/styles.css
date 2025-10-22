@@ -1820,6 +1820,29 @@ a {
   background: #f7f9ff;
 }
 
+.audio-music-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.audio-volume-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.audio-volume-control input[type='range'] {
+  width: 100%;
+}
+
+.audio-volume-label {
+  font-weight: 600;
+  color: #2f3b57;
+}
+
 .status-banner {
   padding: 1rem;
   border-radius: 0.75rem;
