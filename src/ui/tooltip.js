@@ -8,6 +8,13 @@ class Tooltip {
     this.visible = false;
     this.offset = { x: 12, y: 16 };
     window.addEventListener('scroll', () => this.hide());
+    window.addEventListener('resize', () => this.hide());
+    document.addEventListener('pointerdown', (event) => {
+      if (this.element && this.element.contains(event.target)) {
+        return;
+      }
+      this.hide();
+    });
   }
 
   setContent(content) {

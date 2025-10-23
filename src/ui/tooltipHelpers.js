@@ -88,6 +88,9 @@ function createTooltipPortraitElement(asset, root) {
   if (asset.fallback?.color) {
     frame.style.backgroundColor = asset.fallback.color;
   }
+  if (root) {
+    root.classList.add('has-portrait');
+  }
   const image = new Image();
   image.decoding = 'async';
   image.loading = 'lazy';
@@ -105,9 +108,6 @@ function createTooltipPortraitElement(asset, root) {
     image.onload = () => {
       frame.style.backgroundImage = `url(${image.src})`;
       frame.classList.remove('loading');
-      if (root) {
-        root.classList.add('has-portrait');
-      }
     };
     image.onerror = () => {
       tryNext();
