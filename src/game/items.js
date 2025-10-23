@@ -67,9 +67,6 @@ export const ITEM_BLUEPRINTS = {
       magicDefense: { common: 18, uncommon: 28, rare: 40, unique: 56, epic: 76 },
       maxHealth: { common: 160, uncommon: 230, rare: 320, unique: 430, epic: 580 },
     },
-    modifiers: {
-      regenPercentPerSecond: { common: 0.004, uncommon: 0.006, rare: 0.008, unique: 0.011, epic: 0.014 },
-    },
   },
   'wyrmhide-vest': {
     name: '용피 조끼',
@@ -81,6 +78,7 @@ export const ITEM_BLUEPRINTS = {
     },
     modifiers: {
       speed: { common: 0.12, uncommon: 0.18, rare: 0.26, unique: 0.36, epic: 0.48 },
+      regenPercentPerSecond: { common: 0.004, uncommon: 0.006, rare: 0.008, unique: 0.011, epic: 0.014 },
     },
   },
   'aegis-mantle': {

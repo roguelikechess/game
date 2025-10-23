@@ -27,15 +27,24 @@ const ITEM_TYPE_LABELS = {
   accessory: '장신구',
 };
 
+const ITEM_SLOT_LABELS = {
+  hand: '손',
+  body: '몸통',
+  trinket: '장신구',
+};
+
 const STAT_LABELS = {
   attack: '공격력',
   defense: '방어력',
   magicDefense: '마법 방어력',
   spellPower: '주문력',
-  maxHealth: '체력',
+  maxHealth: '최대 체력',
   maxMana: '마나',
   mana: '마나',
   range: '사거리',
+  speed: '이동 속도',
+  attackInterval: '공격 간격',
+  manaRegen: '마나 회복',
 };
 
 const STAT_ICONS = {
@@ -58,6 +67,10 @@ const MODIFIER_LABELS = {
   speed: '이동 속도',
   manaRegen: '마나 회복',
   cooldownReduction: '쿨타임 감소',
+  lifesteal: '생명력 흡수',
+  regenPercentPerSecond: '초당 체력 재생',
+  debuffDurationReduction: '디버프 지속 시간 감소',
+  shieldShredOnHit: '공격 시 보호막 약화',
 };
 
 function formatStat(value) {
@@ -365,7 +378,8 @@ export function buildItemTooltip(item) {
   }
 
   if (blueprint?.slot) {
-    lines.push(`슬롯: ${blueprint.slot}`);
+    const slotLabel = ITEM_SLOT_LABELS[blueprint.slot] || blueprint.slot;
+    lines.push(`슬롯: ${slotLabel}`);
   }
 
   const { stats, modifiers } = computeItemEffectValues(item.blueprintId, rarity, upgradeLevel);
@@ -389,6 +403,20 @@ export function buildItemTooltip(item) {
       lines.push(`${label}: ×${value.toFixed(2)}`);
     } else if (modifierKey === 'cooldownReduction') {
       lines.push(`${label}: ${Math.round(value * 100)}%`);
+    } else if (
+      ['lifesteal', 'regenPercentPerSecond', 'debuffDurationReduction', 'shieldShredOnHit', 'speed'].includes(
+        modifierKey,
+      )
+    ) {
+      const percent = value * 100;
+      let decimals = 0;
+      const absPercent = Math.abs(percent);
+      if (absPercent > 0 && absPercent < 10) {
+        decimals = 1;
+      }
+      const formattedPercent = percent.toFixed(decimals).replace(/\.0$/, '');
+      const sign = percent >= 0 ? '+' : '';
+      lines.push(`${label}: ${sign}${formattedPercent}%`);
     } else {
       const prefix = value >= 0 ? '+' : '';
       const formatted = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value;
