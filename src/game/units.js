@@ -20,12 +20,12 @@ const EXTRA_TRAIT_POOL_BY_JOB = {
   warlock: ['shadow-thread', 'night-temper', 'ember-resonance'],
 };
 
-export function getUnitSkill(definitionId) {
+export function getUnitSkill(definitionId, level = 1) {
   const definition = typeof definitionId === 'string' ? getCharacterById(definitionId) : definitionId;
   if (!definition) {
     return null;
   }
-  return getSkillById(definition.skillId);
+  return getSkillById(definition.skillId, { level });
 }
 
 export function buildBaseStats(definition) {

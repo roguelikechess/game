@@ -6,6 +6,7 @@ import {
   getItemEnhanceCost,
   getItemSellValue,
 } from '../game/items.js';
+import { getSkillLevelModifiers } from '../game/skills.js';
 
 const ROLE_LABELS = {
   frontline: '전열',
@@ -190,6 +191,41 @@ function describeSpellScaling(scaling) {
   return lines;
 }
 
+function formatLevelDelta(factor) {
+  if (!Number.isFinite(factor)) {
+    return '+0%';
+  }
+  const delta = (factor - 1) * 100;
+  let decimals = 0;
+  const abs = Math.abs(delta);
+  if (abs > 0 && abs < 10) {
+    decimals = 1;
+  }
+  let text = delta.toFixed(decimals);
+  if (text === '-0.0' || text === '0.0') {
+    text = '0';
+  }
+  if (text.endsWith('.0')) {
+    text = text.slice(0, -2);
+  }
+  const sign = delta >= 0 && !text.startsWith('-') ? '+' : '';
+  return `${sign}${text}%`;
+}
+
+function summarizeLevelScaling(level) {
+  const modifiers = getSkillLevelModifiers(level);
+  if (!modifiers) {
+    return null;
+  }
+  const parts = [
+    `고정 ${formatLevelDelta(modifiers.flat)}`,
+    `계수 ${formatLevelDelta(modifiers.ratio)}`,
+    `반경 ${formatLevelDelta(modifiers.radius)}`,
+    `주문계수 ${formatLevelDelta(modifiers.spell)}`,
+  ];
+  return `레벨 보정: ${parts.join(' · ')}`;
+}
+
 function formatComparison(entry, baseValue, totalValue) {
   const { type = 'int', suffix = '' } = entry;
   const baseText = formatValueByType(baseValue, type);
@@ -325,6 +361,12 @@ export function buildUnitTooltip({
     lines.push(`스킬: ${skill.name}`);
     if (skill.description) {
       lines.push(skill.description);
+    }
+    if (level != null) {
+      const scalingSummary = summarizeLevelScaling(level);
+      if (scalingSummary) {
+        lines.push(scalingSummary);
+      }
     }
     const scalingDetails = describeSpellScaling(skill.spellPowerScaling);
     if (scalingDetails.length) {

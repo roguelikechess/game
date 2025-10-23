@@ -471,6 +471,53 @@ const RARITY_COOLDOWN_FACTORS = {
 const NO_SCALE_KEYS = new Set(['duration', 'hit', 'manaCost', 'threshold', 'shots', 'targets', 'hits', 'pulses']);
 const CLAMP_PERCENT_KEYS = new Set(['slow', 'damageTakenBonus', 'damageDealtPenalty', 'redirectPercent', 'healPercent']);
 
+const LEVEL_SKIP_KEYS = new Set([
+  'duration',
+  'fearDuration',
+  'stunDuration',
+  'slowDuration',
+  'manaCost',
+  'threshold',
+  'redirectPercent',
+  'guardRedirect',
+  'targets',
+  'hits',
+  'pulses',
+  'shots',
+  'tickInterval',
+  'maxStacks',
+  'maxBounces',
+  'slowMultiplier',
+]);
+
+const LEVEL_RADIUS_KEYS = new Set(['radius', 'width', 'length', 'arcRadius']);
+
+const LEVEL_RATIO_KEYS = new Set([
+  'damageMultiplier',
+  'splashMultiplier',
+  'ramp',
+  'healPercent',
+  'primaryHealPercent',
+  'allyHealPercent',
+  'maxHealthHealPercent',
+  'healRatio',
+  'slow',
+  'critBonus',
+  'pierce',
+  'attackIntervalModifier',
+  'damageTakenBonus',
+  'damageDealtPenalty',
+  'healReduction',
+  'shieldReduction',
+  'manaRefundPercent',
+]);
+
+const LEVEL_FLAT_GROWTH = 0.22;
+const LEVEL_RATIO_GROWTH = 0.03;
+const LEVEL_RADIUS_GROWTH = 0.03;
+const SPELL_POWER_BASE_MOD = 0.98;
+const SPELL_POWER_LEVEL_GROWTH = 0.025;
+
 function formatSkillName(characterName, blueprintName) {
   return blueprintName;
 }
@@ -523,4 +570,112 @@ function scaleSkillEffect(effect, multiplier) {
     scaled[key] = parseFloat(nextValue.toFixed(2));
   });
   return scaled;
+}
+
+function normalizeLevel(level) {
+  const numeric = Number(level);
+  if (!Number.isFinite(numeric)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(numeric));
+}
+
+function getLevelSteps(level) {
+  return Math.max(0, normalizeLevel(level) - 1);
+}
+
+function computeLevelModifiers(level) {
+  const steps = getLevelSteps(level);
+  const flat = Math.pow(1 + LEVEL_FLAT_GROWTH, steps);
+  const ratio = 1 + LEVEL_RATIO_GROWTH * steps;
+  const radius = 1 + LEVEL_RADIUS_GROWTH * steps;
+  const spellBase = steps > 0 ? SPELL_POWER_BASE_MOD : 1;
+  const spell = spellBase * Math.pow(1 + SPELL_POWER_LEVEL_GROWTH, steps);
+  return { steps, flat, ratio, radius, spell };
+}
+
+function scaleNumericValueByLevel(key, value, modifiers) {
+  if (!Number.isFinite(value) || !modifiers || modifiers.steps <= 0) {
+    return value;
+  }
+  if (LEVEL_SKIP_KEYS.has(key)) {
+    return value;
+  }
+  if (LEVEL_RADIUS_KEYS.has(key)) {
+    const scaled = value * modifiers.radius;
+    if (Math.abs(scaled) >= 10 || Number.isInteger(value)) {
+      return Math.round(scaled);
+    }
+    return parseFloat(scaled.toFixed(2));
+  }
+  if (LEVEL_RATIO_KEYS.has(key)) {
+    let scaled = value * modifiers.ratio;
+    if (CLAMP_PERCENT_KEYS.has(key)) {
+      scaled = Math.min(0.95, Math.max(-0.95, scaled));
+    }
+    const precision = Math.abs(scaled) < 1 ? 3 : 2;
+    return parseFloat(scaled.toFixed(precision));
+  }
+  let scaled = value * modifiers.flat;
+  if (CLAMP_PERCENT_KEYS.has(key)) {
+    scaled = Math.min(0.95, Math.max(-0.95, scaled));
+  }
+  if (Math.abs(scaled) >= 10 || Number.isInteger(value)) {
+    return Math.round(scaled);
+  }
+  return parseFloat(scaled.toFixed(2));
+}
+
+function scaleEffectByLevel(effect, modifiers) {
+  if (!effect) {
+    return effect;
+  }
+  if (Array.isArray(effect)) {
+    return effect.map((entry) => scaleEffectByLevel(entry, modifiers));
+  }
+  const scaled = { ...effect };
+  Object.entries(scaled).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      scaled[key] = scaleEffectByLevel(value, modifiers);
+      return;
+    }
+    if (typeof value !== 'number') {
+      return;
+    }
+    scaled[key] = scaleNumericValueByLevel(key, value, modifiers);
+  });
+  return scaled;
+}
+
+function scaleSpellPowerRatios(scaling, modifiers) {
+  if (!scaling) {
+    return scaling;
+  }
+  const scaled = {};
+  Object.entries(scaling).forEach(([key, value]) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const adjusted = value * modifiers.spell;
+    scaled[key] = parseFloat(adjusted.toFixed(4));
+  });
+  return scaled;
+}
+
+export function getSkillLevelModifiers(level = 1) {
+  return computeLevelModifiers(level);
+}
+
+export function scaleSkillForLevel(skill, level = 1) {
+  if (!skill) {
+    return null;
+  }
+  const modifiers = computeLevelModifiers(level);
+  const leveled = { ...skill };
+  leveled.level = normalizeLevel(level);
+  leveled.effect = skill.effect ? scaleEffectByLevel(skill.effect, modifiers) : skill.effect;
+  leveled.spellPowerScaling = skill.spellPowerScaling
+    ? scaleSpellPowerRatios(skill.spellPowerScaling, modifiers)
+    : skill.spellPowerScaling;
+  return leveled;
 }

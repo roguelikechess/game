@@ -103,7 +103,7 @@ export function createRosterPage(roster, { augments = [], party = null } = {}) {
   roster.forEach(({ definition }) => {
     const baseStats = buildBaseStats(definition);
     const job = definition.jobId ? getJobById(definition.jobId) : null;
-    const skill = getUnitSkill(definition.id);
+    const skill = getUnitSkill(definition.id, 1);
 
     const tile = el('div', { className: 'roster-portrait-card' });
     const portraitVisual = createPortraitVisual({
