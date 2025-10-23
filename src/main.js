@@ -287,58 +287,59 @@ function applyAugmentToRun(run, augmentId, tier) {
   return { ...run, augments };
 }
 
+function hydratePersistedState(parsed) {
+  const runState = sanitizeRunState(parsed?.runState);
+  return {
+    runState,
+    shopOfferings: Array.isArray(parsed?.shopOfferings) ? parsed.shopOfferings : generateShop(runState),
+    lastOutcome: parsed?.lastOutcome || null,
+    nextEncounter: parsed?.nextEncounter || null,
+    shopVisible: parsed?.shopVisible !== undefined ? parsed.shopVisible : true,
+    shopReady: parsed?.shopReady !== undefined ? parsed.shopReady : true,
+    shopLocked: !!parsed?.shopLocked,
+    summaryVisible: parsed?.summaryVisible || false,
+    audioSelection: parsed?.audioSelection || {
+      lobby: LOBBY_BGM[0]?.id || null,
+      battle: BATTLE_BGM[0]?.id || null,
+      effects: EFFECT_SETS[0]?.id || null,
+    },
+    audioSettings: {
+      musicVolume: (() => {
+        const saved = Number(parsed?.audioSettings?.musicVolume);
+        if (!Number.isFinite(saved)) {
+          return 0.8;
+        }
+        return Math.max(0, Math.min(1, saved));
+      })(),
+      musicMuted: !!parsed?.audioSettings?.musicMuted,
+    },
+    battleSpeed: parsed?.battleSpeed || 1,
+    pendingAugmentChoices: Array.isArray(parsed?.pendingAugmentChoices)
+      ? parsed.pendingAugmentChoices
+      : [],
+    activeAugmentChoice: parsed?.activeAugmentChoice || null,
+  };
+}
+
 function loadPersistedState() {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
   }
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (!stored) {
+    return null;
+  }
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return null;
-    }
     const parsed = JSON.parse(stored);
-    const runState = sanitizeRunState(parsed.runState);
-    return {
-      runState,
-      shopOfferings: Array.isArray(parsed.shopOfferings) ? parsed.shopOfferings : generateShop(runState),
-      lastOutcome: parsed.lastOutcome || null,
-      nextEncounter: parsed.nextEncounter || null,
-      shopVisible: parsed.shopVisible !== undefined ? parsed.shopVisible : true,
-      shopReady: parsed.shopReady !== undefined ? parsed.shopReady : true,
-      shopLocked: !!parsed.shopLocked,
-      summaryVisible: parsed.summaryVisible || false,
-      audioSelection: parsed.audioSelection || {
-        lobby: LOBBY_BGM[0]?.id || null,
-        battle: BATTLE_BGM[0]?.id || null,
-        effects: EFFECT_SETS[0]?.id || null,
-      },
-      audioSettings: {
-        musicVolume: (() => {
-          const saved = Number(parsed.audioSettings?.musicVolume);
-          if (!Number.isFinite(saved)) {
-            return 0.8;
-          }
-          return Math.max(0, Math.min(1, saved));
-        })(),
-        musicMuted: !!parsed.audioSettings?.musicMuted,
-      },
-      battleSpeed: parsed.battleSpeed || 1,
-      pendingAugmentChoices: Array.isArray(parsed.pendingAugmentChoices)
-        ? parsed.pendingAugmentChoices
-        : [],
-      activeAugmentChoice: parsed.activeAugmentChoice || null,
-    };
+    return hydratePersistedState(parsed);
   } catch (error) {
     console.warn('Failed to load saved state', error);
     return null;
   }
 }
 
-function persistState() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return;
-  }
-  const payload = {
+function createPersistedPayload() {
+  return {
     runState: state.runState,
     shopOfferings: state.shopOfferings,
     lastOutcome: state.lastOutcome,
@@ -353,6 +354,13 @@ function persistState() {
     pendingAugmentChoices: state.pendingAugmentChoices,
     activeAugmentChoice: state.activeAugmentChoice,
   };
+}
+
+function persistState() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  const payload = createPersistedPayload();
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -365,6 +373,59 @@ function clearPersistedState() {
     return;
   }
   window.localStorage.removeItem(STORAGE_KEY);
+}
+
+function base64EncodeString(input) {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  if (typeof window.TextEncoder === 'function') {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(input);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index]);
+    }
+    return window.btoa(binary);
+  }
+  // Fallback for older browsers without TextEncoder.
+  if (typeof window.encodeURIComponent === 'function' && typeof window.unescape === 'function') {
+    return window.btoa(window.unescape(window.encodeURIComponent(input)));
+  }
+  return window.btoa(input);
+}
+
+function base64DecodeString(encoded) {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const sanitized = (encoded || '').replace(/\s+/g, '');
+  const binary = window.atob(sanitized);
+  if (typeof window.TextDecoder === 'function') {
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new TextDecoder().decode(bytes);
+  }
+  const percentEncoded = Array.from(binary)
+    .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+    .join('');
+  if (typeof decodeURIComponent === 'function') {
+    return decodeURIComponent(percentEncoded);
+  }
+  return binary;
+}
+
+function encodePayloadToShareString(payload) {
+  const json = JSON.stringify(payload);
+  return base64EncodeString(json);
+}
+
+function decodeSharedStringToPayload(encoded) {
+  const json = base64DecodeString(encoded);
+  const parsed = JSON.parse(json);
+  return hydratePersistedState(parsed);
 }
 
 function ensureNextEncounter(force = false) {
@@ -419,23 +480,35 @@ const state = {
   },
 };
 
+function applyPersistedStateSnapshot(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  state.runState = snapshot.runState;
+  state.shopOfferings = snapshot.shopOfferings;
+  state.lastOutcome = snapshot.lastOutcome;
+  state.nextEncounter = snapshot.nextEncounter;
+  state.shopVisible = snapshot.shopVisible;
+  state.shopReady = snapshot.shopReady;
+  state.shopLocked = !!snapshot.shopLocked;
+  state.summaryVisible = !!snapshot.summaryVisible && !!snapshot.lastOutcome;
+  state.audioSelection = snapshot.audioSelection;
+  state.audioSettings = snapshot.audioSettings;
+  state.battleSpeed = snapshot.battleSpeed;
+  state.pendingAugmentChoices = Array.isArray(snapshot.pendingAugmentChoices)
+    ? snapshot.pendingAugmentChoices
+    : [];
+  state.activeAugmentChoice = snapshot.activeAugmentChoice || null;
+  state.view = 'main';
+  state.activeBattle = null;
+  state.pendingBattleResult = null;
+  state.pendingUpgrades = [];
+  state.activeUpgrade = null;
+}
+
 const persisted = loadPersistedState();
 if (persisted) {
-  state.runState = persisted.runState;
-  state.shopOfferings = persisted.shopOfferings;
-  state.lastOutcome = persisted.lastOutcome;
-  state.nextEncounter = persisted.nextEncounter;
-  state.shopVisible = persisted.shopVisible;
-  state.shopReady = persisted.shopReady;
-  state.shopLocked = !!persisted.shopLocked;
-  state.summaryVisible = !!persisted.summaryVisible && !!persisted.lastOutcome;
-  state.audioSelection = persisted.audioSelection;
-  state.audioSettings = persisted.audioSettings;
-  state.battleSpeed = persisted.battleSpeed;
-  state.pendingAugmentChoices = Array.isArray(persisted.pendingAugmentChoices)
-    ? persisted.pendingAugmentChoices
-    : [];
-  state.activeAugmentChoice = persisted.activeAugmentChoice || null;
+  applyPersistedStateSnapshot(persisted);
 }
 
 const root = document.getElementById('root');
@@ -503,6 +576,12 @@ function describeOutcome(outcome, casualties) {
       return '승리! 모든 아군이 생존했습니다.';
     }
     return `승리! ${casualtyCount}명의 아군이 전사했습니다.`;
+  }
+  if (outcome.timedOut) {
+    if (casualtyCount === 0) {
+      return '시간 초과! 아군이 전열을 정비하고 재도전을 준비합니다.';
+    }
+    return `시간 초과! ${casualtyCount}명의 아군이 쓰러졌습니다. 전열을 재정비하세요.`;
   }
   return '패배했습니다. 이번 도전은 여기서 종료됩니다.';
 }
@@ -665,6 +744,14 @@ function prepareBattleTransition(outcome, currentRun) {
   }
 
   const performance = summarizeBattlePerformance(outcome);
+  const enemyCombatants =
+    outcome.combatants && Array.isArray(outcome.combatants.enemies)
+      ? outcome.combatants.enemies
+      : [];
+  const livingEnemyCount = enemyCombatants.filter((unit) => unit.health > 0).length;
+  const timedOut = !!outcome.timedOut;
+  const stalemate =
+    timedOut && outcome.survivingAllies.length > 0 && livingEnemyCount > 0;
 
   let nextRun = {
     ...currentRun,
@@ -710,6 +797,10 @@ function prepareBattleTransition(outcome, currentRun) {
     if (bossRound) {
       lootMessages.push(`보스 라운드 보상으로 ${goldEarned} 골드를 획득했습니다.`);
     }
+  } else if (stalemate) {
+    offerings = (state.shopOfferings || []).map((offer) => ({ ...offer }));
+    shopReady = true;
+    shopVisible = true;
   } else {
     nextRun = { ...nextRun, gameOver: true };
   }
@@ -726,6 +817,43 @@ function prepareBattleTransition(outcome, currentRun) {
       : { ...currentShop, offerings: preservedOfferings };
   nextRun = { ...nextRun, itemShop: nextItemShop };
 
+  const outcomeLog = outcome.log
+    .concat(
+      lootMessages.map((message) => ({
+        round: currentRun.round,
+        actor: '전리품',
+        action: message,
+      }))
+    )
+    .concat(
+      experienceGained > 0
+        ? [
+            {
+              round: currentRun.round,
+              actor: '용병단',
+              action: `경험치 ${experienceGained} 획득 (${nextRun.companyExperience}/${nextRun.companyExpToNext})`,
+            },
+            ...(levelsGained > 0
+              ? [
+                  {
+                    round: currentRun.round,
+                    actor: '용병단',
+                    action: `레벨 ${nextRun.companyLevel - levelsGained} → ${nextRun.companyLevel}`,
+                  },
+                ]
+              : []),
+          ]
+        : []
+    );
+
+  if (stalemate) {
+    outcomeLog.push({
+      round: currentRun.round,
+      actor: '전투',
+      action: '시간 초과로 전투가 중단되었습니다. 전열을 정비하세요.',
+    });
+  }
+
   const lastOutcome = {
     victorious: outcome.victorious,
     summary: describeOutcome(outcome, fallenRecords),
@@ -740,36 +868,11 @@ function prepareBattleTransition(outcome, currentRun) {
         }
       : null,
     casualties: fallenRecords,
-    log: outcome.log
-      .concat(
-        lootMessages.map((message) => ({
-          round: currentRun.round,
-          actor: '전리품',
-          action: message,
-        }))
-      )
-      .concat(
-        experienceGained > 0
-          ? [
-              {
-                round: currentRun.round,
-                actor: '용병단',
-                action: `경험치 ${experienceGained} 획득 (${nextRun.companyExperience}/${nextRun.companyExpToNext})`,
-              },
-              ...(levelsGained > 0
-                ? [
-                    {
-                      round: currentRun.round,
-                      actor: '용병단',
-                      action: `레벨 ${nextRun.companyLevel - levelsGained} → ${nextRun.companyLevel}`,
-                    },
-                  ]
-                : []),
-            ]
-          : []
-      ),
+    log: outcomeLog,
     loot: lootRecord,
     performance,
+    timedOut,
+    stalemate,
   };
 
   if (lastOutcome.victorious && bossRound) {
@@ -1278,6 +1381,61 @@ function restartRun() {
   audioManager.playLobby();
 }
 
+async function handleExportProgress() {
+  try {
+    if (!state.runState) {
+      window.alert('내보낼 진행도가 없습니다.');
+      return;
+    }
+    const payload = createPersistedPayload();
+    const shareCode = encodePayloadToShareString(payload);
+    let copied = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareCode);
+        copied = true;
+      } catch (clipboardError) {
+        console.warn('Failed to copy progress code to clipboard', clipboardError);
+      }
+    }
+    if (copied) {
+      window.prompt(
+        '진행도 코드가 클립보드에 복사되었습니다. 필요하면 아래 내용을 다시 복사하세요.',
+        shareCode
+      );
+      return;
+    }
+    window.prompt('아래 진행도 코드를 복사해 보관하세요.', shareCode);
+  } catch (error) {
+    console.error('Failed to export progress', error);
+    window.alert('진행도 내보내기에 실패했습니다. 잠시 후 다시 시도해주세요.');
+  }
+}
+
+function handleImportProgress() {
+  const input = window.prompt('불러올 진행도 코드를 붙여넣으세요.');
+  if (!input) {
+    return;
+  }
+  try {
+    const snapshot = decodeSharedStringToPayload(input.trim());
+    applyPersistedStateSnapshot(snapshot);
+    refreshPendingUpgrades();
+    ensureNextEncounter(false);
+    applyAudioSelection(state.audioSelection);
+    applyAudioSettings(state.audioSettings);
+    persistState();
+    renderApp();
+    if (!state.audioSettings.musicMuted && !state.runState.gameOver) {
+      audioManager.playLobby();
+    }
+    window.alert('진행도가 성공적으로 불러와졌습니다!');
+  } catch (error) {
+    console.error('Failed to import progress', error);
+    window.alert('진행도 불러오기에 실패했습니다. 코드가 올바른지 확인해주세요.');
+  }
+}
+
 function handleNewGame() {
   if (window.confirm('새로운 게임을 시작하시겠습니까? 진행 중인 도전이 초기화됩니다.')) {
     restartRun();
@@ -1294,6 +1452,46 @@ function renderHeader() {
   statusBar.appendChild(el('span', { className: 'status-pill', text: `라운드 ${roundValue}` }));
   statusBar.appendChild(el('span', { className: 'status-pill', text: `골드 ${goldValue}` }));
   header.appendChild(statusBar);
+
+  const companyRow = el('div', { className: 'header-company-row' });
+  const companyLevel = run.companyLevel || 1;
+  const companyExp = run.companyExperience || 0;
+  const companyToNext = Math.max(1, run.companyExpToNext || 1);
+  const companyProgress = Math.max(0, Math.min(1, companyExp / companyToNext));
+
+  const levelBadge = el('div', {
+    className: 'company-level-pill',
+    text: `용병단 Lv.${companyLevel}`,
+  });
+  const progressBar = el('div', { className: 'company-progress-bar' });
+  const progressFill = el('div', { className: 'company-progress-fill' });
+  progressFill.style.width = `${Math.round(companyProgress * 100)}%`;
+  progressBar.appendChild(progressFill);
+  const progressText = el('span', {
+    className: 'company-progress-text',
+    text: `${companyExp} / ${companyToNext} EXP`,
+  });
+
+  companyRow.appendChild(levelBadge);
+  companyRow.appendChild(progressBar);
+  companyRow.appendChild(progressText);
+
+  const experienceOffer = getExperiencePurchaseOffer(run);
+  if (experienceOffer) {
+    const offerButton = el('button', {
+      className: 'nav-button small',
+      text: `경험치 구매 (-${experienceOffer.cost} 골드 / +${experienceOffer.experience} EXP)`,
+      type: 'button',
+    });
+    offerButton.disabled = run.gameOver || run.gold < experienceOffer.cost;
+    offerButton.addEventListener('click', () => {
+      if (!offerButton.disabled) {
+        handleBuyExperience();
+      }
+    });
+    companyRow.appendChild(offerButton);
+  }
+  header.appendChild(companyRow);
 
   const nav = el('nav', { className: 'navbar' });
   const navDescriptions = {
@@ -1319,10 +1517,127 @@ function renderHeader() {
     }
     nav.appendChild(button);
   });
-  header.appendChild(nav);
+
+  const audioMenu = (() => {
+    const details = el('details', { className: 'nav-audio-menu' });
+    const summary = el('summary', { text: '사운드 옵션' });
+    details.appendChild(summary);
+
+    const panel = el('div', { className: 'nav-audio-panel' });
+    const buildSelect = (labelText, tracks, selected, onChange) => {
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        return null;
+      }
+      const field = el('label', { className: 'nav-audio-field' });
+      field.appendChild(el('span', { className: 'nav-audio-label', text: labelText }));
+      const select = el('select', { className: 'nav-audio-select' });
+      tracks.forEach((track) => {
+        const option = el('option', {
+          value: track.id,
+          text: track.label || track.id,
+        });
+        if (track.id === selected) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+      if (selected && tracks.some((track) => track.id === selected)) {
+        select.value = selected;
+      }
+      select.addEventListener('change', (event) => onChange(event.target.value));
+      field.appendChild(select);
+      return field;
+    };
+
+    const lobbySelect = buildSelect('로비 배경음', LOBBY_BGM, state.audioSelection.lobby, (value) =>
+      handleAudioChange('lobby', value)
+    );
+    if (lobbySelect) {
+      panel.appendChild(lobbySelect);
+    }
+
+    const battleSelect = buildSelect('전투 배경음', BATTLE_BGM, state.audioSelection.battle, (value) =>
+      handleAudioChange('battle', value)
+    );
+    if (battleSelect) {
+      panel.appendChild(battleSelect);
+    }
+
+    const effectSelect = buildSelect('효과음', EFFECT_SETS, state.audioSelection.effects, (value) =>
+      handleAudioChange('effects', value)
+    );
+    if (effectSelect) {
+      panel.appendChild(effectSelect);
+    }
+
+    const musicSettings = {
+      volume: Math.round(Math.max(0, Math.min(1, state.audioSettings?.musicVolume ?? 0.8)) * 100),
+      muted: !!state.audioSettings?.musicMuted,
+    };
+
+    const actions = el('div', { className: 'nav-audio-actions' });
+    const muteButton = el('button', {
+      className: `nav-button small${musicSettings.muted ? ' secondary' : ''}`,
+      text: musicSettings.muted ? 'BGM 켜기' : 'BGM 끄기',
+      type: 'button',
+    });
+    muteButton.addEventListener('click', () => {
+      handleAudioSettingsChange({ musicMuted: !musicSettings.muted });
+    });
+    actions.appendChild(muteButton);
+
+    const volumeField = el('label', { className: 'nav-audio-volume' });
+    const volumeLabel = el('span', {
+      className: 'nav-audio-volume-label',
+      text: `BGM 음량 ${musicSettings.volume}%`,
+    });
+    volumeField.appendChild(volumeLabel);
+    const slider = el('input', {
+      type: 'range',
+      min: '0',
+      max: '100',
+      value: `${musicSettings.volume}`,
+      step: '1',
+    });
+    slider.addEventListener('input', (event) => {
+      const raw = Number(event.target.value);
+      if (!Number.isFinite(raw)) {
+        return;
+      }
+      const scaled = Math.max(0, Math.min(100, raw));
+      volumeLabel.textContent = `BGM 음량 ${Math.round(scaled)}%`;
+      handleAudioSettingsChange({ musicVolume: scaled / 100 }, { render: false, persist: false });
+    });
+    slider.addEventListener('change', (event) => {
+      const raw = Number(event.target.value);
+      if (!Number.isFinite(raw)) {
+        return;
+      }
+      const scaled = Math.max(0, Math.min(100, raw));
+      handleAudioSettingsChange({ musicVolume: scaled / 100 });
+    });
+    volumeField.appendChild(slider);
+    actions.appendChild(volumeField);
+
+    if (panel.childElementCount || actions.childElementCount) {
+      panel.appendChild(actions);
+    }
+
+    details.appendChild(panel);
+    return details;
+  })();
+
+  nav.appendChild(audioMenu);
+  const exportButton = el('button', { className: 'nav-button', text: '진행도 내보내기' });
+  exportButton.addEventListener('click', handleExportProgress);
+  nav.appendChild(exportButton);
+  const importButton = el('button', { className: 'nav-button', text: '진행도 불러오기' });
+  importButton.addEventListener('click', handleImportProgress);
+  nav.appendChild(importButton);
   const restartButton = el('button', { className: 'nav-button danger', text: '새 게임' });
   restartButton.addEventListener('click', handleNewGame);
   nav.appendChild(restartButton);
+  header.appendChild(nav);
   return header;
 }
 
@@ -1360,8 +1675,6 @@ function renderContent() {
     onOfferingsChange: updateOfferings,
     onSwapUnits: handleSwapUnits,
     onSellUnit: handleSellUnit,
-    onBuyExperience: handleBuyExperience,
-    experienceOffer: getExperiencePurchaseOffer(state.runState),
     onStartBattle: handleStartBattle,
     onPlacementChange: handlePlacementChange,
     onToggleShop: handleToggleShop,
@@ -1370,14 +1683,6 @@ function renderContent() {
     shopReady: state.shopReady,
     shopLocked: state.shopLocked,
     summaryVisible: state.summaryVisible && !!state.lastOutcome,
-    audioOptions: {
-      lobby: { tracks: LOBBY_BGM, selected: state.audioSelection.lobby },
-      battle: { tracks: BATTLE_BGM, selected: state.audioSelection.battle },
-      effects: { tracks: EFFECT_SETS, selected: state.audioSelection.effects },
-    },
-    onAudioChange: handleAudioChange,
-    audioSettings: state.audioSettings,
-    onAudioSettingsChange: handleAudioSettingsChange,
     lastOutcome: state.lastOutcome,
     upcomingEncounter: state.nextEncounter,
     onDismissOutcome: handleDismissOutcome,

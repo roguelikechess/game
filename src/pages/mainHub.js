@@ -47,6 +47,13 @@ function simulatePurchaseForUpgrade(party, definitionId) {
   return cloned;
 }
 
+function isUnitOnBench(party, definitionId) {
+  if (!party?.bench?.length) {
+    return false;
+  }
+  return party.bench.some((unit) => unit?.definitionId === definitionId);
+}
+
 function shouldHighlightOffering(party, offering) {
   if (!party || !offering?.unit) {
     return false;
@@ -68,25 +75,6 @@ function countDeployedUnits(party) {
   return ['frontline', 'midline', 'backline']
     .map((line) => party[line].filter((slot) => slot.unit).length)
     .reduce((sum, count) => sum + count, 0);
-}
-
-function renderLogEntries(logEntries = []) {
-  if (!logEntries.length) {
-    return el('div', { className: 'empty-state', text: '아직 기록된 전투 로그가 없습니다.' });
-  }
-  const list = el('ul', { className: 'battle-log-list' });
-  logEntries.forEach((entry) => {
-    const item = el('li', { className: 'battle-log-entry' });
-    item.appendChild(el('span', { className: 'log-round', text: `R${entry.round}` }));
-    const actorText = entry.actor ? getShortName(entry.actor) || entry.actor : '알 수 없음';
-    item.appendChild(el('span', { className: 'log-actor', text: actorText }));
-    item.appendChild(el('span', { className: 'log-action', text: entry.action || '' }));
-    if (entry.value) {
-      item.appendChild(el('span', { className: 'log-value', text: `${entry.value}` }));
-    }
-    list.appendChild(item);
-  });
-  return list;
 }
 
 function renderLootSummary(loot) {
@@ -275,67 +263,6 @@ function renderOutcomeOverlay(lastOutcome, onDismiss) {
   return overlay;
 }
 
-function createCompanyPanel(runState, experienceOffer, onBuyExperience) {
-  if (!runState) {
-    return null;
-  }
-  const panel = el('div', { className: 'company-panel' });
-  panel.appendChild(el('h3', { text: '용병단 레벨' }));
-  const levelLine = el('div', { className: 'company-level-line' });
-  levelLine.appendChild(el('strong', { text: `Lv.${runState.companyLevel || 1}` }));
-  levelLine.appendChild(
-    el('span', {
-      text: `${runState.companyExperience || 0} / ${runState.companyExpToNext || 1} EXP`,
-    })
-  );
-  panel.appendChild(levelLine);
-  const progress = Math.max(
-    0,
-    Math.min(1, (runState.companyExperience || 0) / Math.max(1, runState.companyExpToNext || 1))
-  );
-  const bar = el('div', { className: 'company-progress' });
-  const fill = el('div', { className: 'company-progress-fill' });
-  fill.style.width = `${Math.round(progress * 100)}%`;
-  bar.appendChild(fill);
-  panel.appendChild(bar);
-  if (typeof onBuyExperience === 'function' && experienceOffer) {
-    const button = el('button', {
-      className: 'nav-button small',
-      text: `경험치 구매 (-${experienceOffer.cost} 골드 / +${experienceOffer.experience} EXP)`,
-    });
-    button.disabled = runState.gameOver || runState.gold < experienceOffer.cost;
-    button.addEventListener('click', () => onBuyExperience());
-    panel.appendChild(button);
-  }
-  return panel;
-}
-
-function createAudioSelect(label, options, selectedId, onChange) {
-  if (!options || options.length === 0) {
-    return null;
-  }
-  const wrapper = el('label', { className: 'audio-select' });
-  wrapper.appendChild(el('span', { text: label }));
-  const select = el('select');
-  options.forEach((opt) => {
-    const option = el('option', { value: opt.id, text: opt.label || opt.id });
-    if (opt.id === selectedId) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  });
-  if (options.length > 0) {
-    select.value = selectedId || options[0].id;
-  }
-  select.addEventListener('change', (event) => {
-    if (typeof onChange === 'function') {
-      onChange(event.target.value);
-    }
-  });
-  wrapper.appendChild(select);
-  return wrapper;
-}
-
 export function createMainHubPage({
   runState,
   offerings,
@@ -343,8 +270,6 @@ export function createMainHubPage({
   onOfferingsChange,
   onSwapUnits,
   onSellUnit,
-  onBuyExperience,
-  experienceOffer,
   onStartBattle,
   onPlacementChange,
   onToggleShop,
@@ -354,10 +279,6 @@ export function createMainHubPage({
   shopLocked,
   summaryVisible,
   onShowOutcome,
-  audioOptions,
-  onAudioChange,
-  audioSettings,
-  onAudioSettingsChange,
   lastOutcome,
   upcomingEncounter,
   onDismissOutcome,
@@ -367,151 +288,6 @@ export function createMainHubPage({
   const page = el('div', { className: 'main-hub-page page' });
   const layout = el('div', { className: 'main-hub-grid' });
   page.appendChild(layout);
-
-  const logCard = el('div', { className: 'card log-panel' });
-  logCard.appendChild(el('h2', { className: 'section-title', text: '전투 기록' }));
-  logCard.appendChild(el('p', { className: 'log-summary', text: `라운드 ${runState.round}, 보유 골드 ${runState.gold}` }));
-  const companyPanel = createCompanyPanel(runState, experienceOffer, onBuyExperience);
-  if (companyPanel) {
-    logCard.appendChild(companyPanel);
-  }
-
-  if (lastOutcome) {
-    const banner = el('div', {
-      className: `status-banner ${lastOutcome.victorious ? 'success' : 'failure'}`,
-    });
-    banner.appendChild(el('span', { text: lastOutcome.summary }));
-    if (lastOutcome.goldEarned) {
-      banner.appendChild(el('span', { text: `+${lastOutcome.goldEarned} 골드` }));
-    }
-    logCard.appendChild(banner);
-    const lootBlock = renderLootSummary(lastOutcome.loot);
-    if (lootBlock) {
-      logCard.appendChild(lootBlock);
-    }
-    const experienceBlock = renderExperienceSummary(lastOutcome.experience);
-    if (experienceBlock) {
-      logCard.appendChild(experienceBlock);
-    }
-    const casualtiesBlock = renderCasualtyList(lastOutcome.casualties);
-    if (casualtiesBlock) {
-      logCard.appendChild(casualtiesBlock);
-    }
-    const performanceBlock = renderPerformanceTable(lastOutcome.performance);
-    if (performanceBlock) {
-      logCard.appendChild(performanceBlock);
-    }
-    if (!summaryVisible && typeof onShowOutcome === 'function') {
-      const actionRow = el('div', { className: 'log-actions' });
-      const summaryButton = el('button', {
-        className: 'nav-button secondary',
-        text: '전투 요약 보기',
-      });
-      summaryButton.addEventListener('click', () => onShowOutcome());
-      actionRow.appendChild(summaryButton);
-      logCard.appendChild(actionRow);
-    }
-  } else {
-    logCard.appendChild(
-      el('div', {
-        className: 'status-banner neutral',
-        text: '용병을 영입해 첫 전투를 준비하세요.',
-      })
-    );
-  }
-
-  const recentLog = (lastOutcome?.log || []).slice(-12).reverse();
-  logCard.appendChild(renderLogEntries(recentLog));
-
-  if (audioOptions && typeof onAudioChange === 'function') {
-    const audioCard = el('div', { className: 'audio-settings' });
-    audioCard.appendChild(el('h3', { text: '사운드 옵션' }));
-
-    const lobbySelect = createAudioSelect(
-      '로비 배경음',
-      audioOptions.lobby?.tracks || [],
-      audioOptions.lobby?.selected,
-      (value) => onAudioChange('lobby', value)
-    );
-    if (lobbySelect) {
-      audioCard.appendChild(lobbySelect);
-    }
-
-    const battleSelect = createAudioSelect(
-      '전투 배경음',
-      audioOptions.battle?.tracks || [],
-      audioOptions.battle?.selected,
-      (value) => onAudioChange('battle', value)
-    );
-    if (battleSelect) {
-      audioCard.appendChild(battleSelect);
-    }
-
-    const effectSelect = createAudioSelect(
-      '효과음',
-      audioOptions.effects?.tracks || [],
-      audioOptions.effects?.selected,
-      (value) => onAudioChange('effects', value)
-    );
-    if (effectSelect) {
-      audioCard.appendChild(effectSelect);
-    }
-
-    const musicSettings = {
-      volume: Math.round(Math.max(0, Math.min(1, audioSettings?.musicVolume ?? 0.8)) * 100),
-      muted: !!audioSettings?.musicMuted,
-    };
-
-    if (typeof onAudioSettingsChange === 'function') {
-      const controls = el('div', { className: 'audio-music-controls' });
-
-      const muteButton = el('button', {
-        className: `nav-button small${musicSettings.muted ? ' secondary' : ''}`,
-        text: musicSettings.muted ? 'BGM 켜기' : 'BGM 끄기',
-        type: 'button',
-      });
-      muteButton.addEventListener('click', () => {
-        onAudioSettingsChange({ musicMuted: !musicSettings.muted });
-      });
-      controls.appendChild(muteButton);
-
-      const volumeControl = el('label', { className: 'audio-volume-control' });
-      const volumeLabel = el('span', { className: 'audio-volume-label', text: `BGM 음량 ${musicSettings.volume}%` });
-      volumeControl.appendChild(volumeLabel);
-      const slider = el('input', {
-        type: 'range',
-        min: '0',
-        max: '100',
-        value: `${musicSettings.volume}`,
-        step: '1',
-      });
-      slider.addEventListener('input', (event) => {
-        const raw = Number(event.target.value);
-        if (!Number.isFinite(raw)) {
-          return;
-        }
-        const scaled = Math.max(0, Math.min(100, raw));
-        volumeLabel.textContent = `BGM 음량 ${Math.round(scaled)}%`;
-        onAudioSettingsChange({ musicVolume: scaled / 100 }, { render: false, persist: false });
-      });
-      slider.addEventListener('change', (event) => {
-        const raw = Number(event.target.value);
-        if (!Number.isFinite(raw)) {
-          return;
-        }
-        const scaled = Math.max(0, Math.min(100, raw));
-        onAudioSettingsChange({ musicVolume: scaled / 100 });
-      });
-      volumeControl.appendChild(slider);
-      controls.appendChild(volumeControl);
-
-      audioCard.appendChild(controls);
-    }
-
-    logCard.appendChild(audioCard);
-  }
-
-  layout.appendChild(logCard);
 
   const battleCard = el('div', { className: 'card battle-panel' });
   const controlsRow = el('div', { className: 'battle-controls-row' });
@@ -549,7 +325,38 @@ export function createMainHubPage({
     }
   });
   controlButtons.appendChild(shopToggleButton);
+  if (lastOutcome && !summaryVisible && typeof onShowOutcome === 'function') {
+    const summaryButton = el('button', {
+      className: 'nav-button secondary',
+      text: '전투 요약 보기',
+    });
+    summaryButton.addEventListener('click', () => onShowOutcome());
+    controlButtons.appendChild(summaryButton);
+  }
   battleCard.appendChild(controlButtons);
+
+  if (lastOutcome) {
+    const banner = el('div', {
+      className: `status-banner compact ${lastOutcome.victorious ? 'success' : 'failure'}`,
+    });
+    banner.appendChild(el('span', { text: lastOutcome.summary }));
+    if (lastOutcome.goldEarned) {
+      banner.appendChild(el('span', { text: `+${lastOutcome.goldEarned} 골드` }));
+    }
+    if (lastOutcome.experience?.gained) {
+      banner.appendChild(
+        el('span', { text: `경험치 +${lastOutcome.experience.gained}` })
+      );
+    }
+    battleCard.appendChild(banner);
+  } else {
+    battleCard.appendChild(
+      el('div', {
+        className: 'status-banner neutral',
+        text: '용병을 영입해 첫 전투를 준비하세요.',
+      })
+    );
+  }
 
   if (!shopReady) {
     battleCard.appendChild(
@@ -592,6 +399,15 @@ export function createMainHubPage({
   const offeringList = el('div', { className: 'unit-grid shop-grid' });
   offerings.forEach((offering, index) => {
     const card = createUnitCard({ definitionId: offering.unit.id, mode: 'shop' });
+    if (isUnitOnBench(runState.activeParty, offering.unit.id)) {
+      card.classList.add('bench-duplicate');
+      card.appendChild(
+        el('div', {
+          className: 'bench-note',
+          text: '벤치에 있음',
+        })
+      );
+    }
     if (shouldHighlightOffering(runState.activeParty, offering)) {
       card.classList.add('upgrade-ready');
       card.appendChild(

@@ -174,6 +174,7 @@ export function createBattleOverlay({
       skill: unit.skill,
       level: unit.level,
       items: Array.isArray(unit.items) ? unit.items.map((item) => describeItem(item)) : [],
+      portraitId: unit.portraitId,
     });
     tooltip.show(content, { x: event.clientX, y: event.clientY });
   });

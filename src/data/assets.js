@@ -11,10 +11,17 @@ const portrait = (id, color) => {
     `assets/portraits/${id}.png`,
     `assets/portraits/${id}.webp`,
   ]);
+  const splashSources = uniqueSources([
+    `assets/portraits/${id}/splash.png`,
+    `assets/portraits/${id}/splash.webp`,
+    `assets/portraits/${id}_splash.png`,
+    `assets/portraits/${id}_splash.webp`,
+  ]);
   return {
     id,
     src: sources[0] || null,
     sources,
+    splashSources,
     fallback: { shape: 'circle', color },
   };
 };
@@ -193,6 +200,13 @@ const portraitData = [
   { id: 'myrren', color: '#6a82ff' },
   { id: 'kaelen', color: '#2f9ad9' },
   { id: 'seraphel', color: '#f4a1c8' },
+  { id: 'selka', color: '#6f5aad' },
+  { id: 'caela', color: '#4fbad9' },
+  { id: 'raxen', color: '#8c6a4a' },
+  { id: 'shelar', color: '#5aa4f0' },
+  { id: 'elyndra', color: '#f5c2ff' },
+  { id: 'velis', color: '#ffb873' },
+  { id: 'galen', color: '#4b7cc0' },
 ];
 
 const spriteData = [
@@ -231,6 +245,13 @@ const spriteData = [
   { id: 'myrren', color: '#6a82ff', accent: '#d6ddff' },
   { id: 'kaelen', color: '#2f9ad9', accent: '#c6e8ff' },
   { id: 'seraphel', color: '#f4a1c8', accent: '#ffe2f1' },
+  { id: 'selka', color: '#6f5aad', accent: '#dacfff' },
+  { id: 'caela', color: '#4fbad9', accent: '#c7f1ff' },
+  { id: 'raxen', color: '#8c6a4a', accent: '#e6cbaa' },
+  { id: 'shelar', color: '#5aa4f0', accent: '#cbe1ff' },
+  { id: 'elyndra', color: '#f5c2ff', accent: '#ffe8ff' },
+  { id: 'velis', color: '#ffb873', accent: '#ffe5c8' },
+  { id: 'galen', color: '#4b7cc0', accent: '#c5dfff' },
 ].map((entry) => ({
   ...entry,
   geometry: resolveSpriteGeometry(entry.id),

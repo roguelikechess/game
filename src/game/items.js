@@ -30,6 +30,9 @@ export const ITEM_BLUEPRINTS = {
     statBonuses: {
       attack: { common: 28, uncommon: 48, rare: 74, unique: 108, epic: 152 },
     },
+    modifiers: {
+      lifesteal: { common: 0.06, uncommon: 0.08, rare: 0.1, unique: 0.12, epic: 0.15 },
+    },
   },
   'echo-blades': {
     name: '메아리 단검',
@@ -75,6 +78,7 @@ export const ITEM_BLUEPRINTS = {
     },
     modifiers: {
       speed: { common: 0.12, uncommon: 0.18, rare: 0.26, unique: 0.36, epic: 0.48 },
+      regenPercentPerSecond: { common: 0.004, uncommon: 0.006, rare: 0.008, unique: 0.011, epic: 0.014 },
     },
   },
   'aegis-mantle': {
@@ -97,7 +101,10 @@ export const ITEM_BLUEPRINTS = {
     slot: 'trinket',
     lootWeight: 0.35,
     statBonuses: {
-      range: { common: 80, uncommon: 116, rare: 160, unique: 212, epic: 272 },
+      range: { common: 120, uncommon: 170, rare: 230, unique: 300, epic: 380 },
+    },
+    modifiers: {
+      shieldShredOnHit: { common: 0.08, uncommon: 0.12, rare: 0.16, unique: 0.2, epic: 0.25 },
     },
   },
   'swift-necklace': {
@@ -116,6 +123,7 @@ export const ITEM_BLUEPRINTS = {
     lootWeight: 0.95,
     modifiers: {
       speed: { common: 0.14, uncommon: 0.22, rare: 0.32, unique: 0.44, epic: 0.6 },
+      debuffDurationReduction: { common: 0.08, uncommon: 0.12, rare: 0.16, unique: 0.21, epic: 0.26 },
     },
   },
   'focus-amulet': {
@@ -248,6 +256,10 @@ export function aggregateItemEffects(items = []) {
       speed: 0,
       manaRegen: 0,
       cooldownReduction: 0,
+      lifesteal: 0,
+      regenPercentPerSecond: 0,
+      debuffDurationReduction: 0,
+      shieldShredOnHit: 0,
     },
     names: [],
   };
@@ -282,6 +294,18 @@ export function aggregateItemEffects(items = []) {
     }
     if (modifiers.cooldownReduction) {
       ensureStatsObject(summary.modifiers, 'cooldownReduction', modifiers.cooldownReduction);
+    }
+    if (modifiers.lifesteal) {
+      ensureStatsObject(summary.modifiers, 'lifesteal', modifiers.lifesteal);
+    }
+    if (modifiers.regenPercentPerSecond) {
+      ensureStatsObject(summary.modifiers, 'regenPercentPerSecond', modifiers.regenPercentPerSecond);
+    }
+    if (modifiers.debuffDurationReduction) {
+      ensureStatsObject(summary.modifiers, 'debuffDurationReduction', modifiers.debuffDurationReduction);
+    }
+    if (modifiers.shieldShredOnHit) {
+      ensureStatsObject(summary.modifiers, 'shieldShredOnHit', modifiers.shieldShredOnHit);
     }
   });
 

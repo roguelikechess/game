@@ -177,7 +177,7 @@ export function createUnitCard({
       info.appendChild(itemList);
     }
 
-    const skill = getUnitSkill(definition.id);
+    const skill = getUnitSkill(definition.id, unit?.level || 1);
     if (skill) {
       const skillBlock = el('div', { className: 'skill-block' });
       const skillTitle = el('div', { className: 'skill-name', text: `스킬: ${skill.name}` });
@@ -224,9 +224,10 @@ export function createUnitCard({
         level: unit?.level || 1,
         stats: tooltipStats,
         baseStats,
-        skill: getUnitSkill(definition.id),
+        skill: getUnitSkill(definition.id, unit?.level || 1),
         items,
         extraLines: tooltipExtra,
+        portraitId: definition?.portraitId,
       }),
     { anchor: isShopMode || isMinimalMode ? 'element' : 'cursor' }
   );

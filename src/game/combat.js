@@ -214,6 +214,9 @@ function aggregateTraitEffects(traitIds) {
       if (effects.rampingAttackSpeed) {
         acc.rampingAttackSpeed += effects.rampingAttackSpeed;
       }
+      if (effects.debuffDurationReduction) {
+        acc.debuffDurationReduction += effects.debuffDurationReduction;
+      }
       return acc;
     },
     {
@@ -224,6 +227,7 @@ function aggregateTraitEffects(traitIds) {
       manaRegenMultiplier: 1,
       damageReduction: 0,
       rampingAttackSpeed: 0,
+      debuffDurationReduction: 0,
     }
   );
 }
@@ -304,6 +308,21 @@ function createCombatant({ unit, line, index, total, placements }, side, augment
 
   const tokenMetrics = resolveTokenMetrics(spriteAsset);
 
+  if (itemModifiers.lifesteal) {
+    traitEffects.lifesteal += Math.max(0, itemModifiers.lifesteal);
+  }
+  if (itemModifiers.regenPercentPerSecond) {
+    traitEffects.regenPercentPerSecond += Math.max(0, itemModifiers.regenPercentPerSecond);
+  }
+  if (itemModifiers.debuffDurationReduction) {
+    traitEffects.debuffDurationReduction = (traitEffects.debuffDurationReduction || 0)
+      + Math.max(0, itemModifiers.debuffDurationReduction);
+  }
+
+  const debuffDurationReduction = Math.max(0, Math.min(0.8, traitEffects.debuffDurationReduction || 0));
+  const debuffDurationMultiplier = Math.max(0.2, 1 - debuffDurationReduction);
+  const shieldShredOnHit = Math.max(0, Math.min(0.95, itemModifiers.shieldShredOnHit || 0));
+
   const combatant = {
     id: unit.instanceId,
     definitionId: unit.definitionId,
@@ -312,7 +331,7 @@ function createCombatant({ unit, line, index, total, placements }, side, augment
     rarity: definition?.rarity || null,
     role: job?.role || 'frontline',
     behavior: job?.behavior || { type: 'charger', engageRange: 60 },
-    skill: definition ? getUnitSkill(definition.id) : null,
+    skill: definition ? getUnitSkill(definition.id, unit.level || 1) : null,
     traitIds,
     traitEffects,
     side,
@@ -356,6 +375,8 @@ function createCombatant({ unit, line, index, total, placements }, side, augment
     level: unit.level || 1,
     healingReceivedMultiplier: 1,
     shieldReceivedMultiplier: 1,
+    debuffDurationMultiplier,
+    shieldShredOnHit,
   };
   if (augmentContext) {
     if (side === 'allies' && typeof augmentContext.applyToAlly === 'function') {
@@ -506,7 +527,7 @@ function createEnemyCombatant(role, index, total, scalingFactor, round = 1) {
     rarity: definition.rarity || null,
     role,
     behavior: getJobById(definition.jobId)?.behavior || { type: 'charger', engageRange: 60 },
-    skill: definition.skillId ? getUnitSkill(definition.id) : null,
+    skill: definition.skillId ? getUnitSkill(definition.id, level) : null,
     traitIds,
     traitEffects,
     side: 'enemies',
@@ -684,7 +705,7 @@ function createBossCombatant(round, scaling, previousScaling) {
     rarity: template.rarity || null,
     role: 'frontline',
     behavior: getJobById(template.jobId)?.behavior || { type: 'charger', engageRange: 68 },
-    skill: template.skillId ? getUnitSkill(template.id) : null,
+    skill: template.skillId ? getUnitSkill(template.id, 4) : null,
     traitIds,
     traitEffects,
     side: 'enemies',
@@ -825,8 +846,20 @@ function inflictDebuff(target, debuff, options = {}) {
   if (!target || !debuff) {
     return;
   }
-  applyDebuff(target, debuff);
-  const duration = options.duration ?? debuff.duration;
+  const multiplier = target.debuffDurationMultiplier ?? 1;
+  const applied = { ...debuff };
+  if (typeof applied.duration === 'number' && Number.isFinite(applied.duration)) {
+    applied.duration = Math.max(0, applied.duration * multiplier);
+  }
+  applyDebuff(target, applied);
+  let duration = null;
+  if (typeof options.duration === 'number' && Number.isFinite(options.duration)) {
+    duration = Math.max(0, options.duration * multiplier);
+  } else if (typeof debuff.duration === 'number' && Number.isFinite(debuff.duration)) {
+    duration = Math.max(0, debuff.duration * multiplier);
+  } else if (typeof applied.duration === 'number' && Number.isFinite(applied.duration)) {
+    duration = Math.max(0, applied.duration);
+  }
   if (options.events && duration > 0) {
     recordStatusEvent(options.events, options.timestamp, [target], 'debuff', options.effectType, duration, options.source);
   }
@@ -1221,7 +1254,36 @@ function applyDamage(target, amount, source, log, events, timestamp, context = {
     remainingDamage -= absorbedByShield;
   }
 
+  const shredShield = () => {
+    if (!source || !source.shieldShredOnHit) {
+      return 0;
+    }
+    const ratio = Math.max(0, Math.min(0.95, source.shieldShredOnHit));
+    if (ratio <= 0) {
+      return 0;
+    }
+    const currentShield = target.shield || 0;
+    if (currentShield <= 0) {
+      return 0;
+    }
+    const removed = absorbShieldDamage(target, currentShield * ratio);
+    if (removed > 0 && events) {
+      events.push({
+        kind: 'shield',
+        timestamp,
+        attackerId: source?.id,
+        targetIds: [target.id],
+        amount: Math.round(removed),
+        remainingHealth: target.health,
+        positionUpdates: context.positions,
+        description: `${source?.name || '공격자'}가 ${target.name}의 보호막을 약화시켰다`,
+      });
+    }
+    return removed;
+  };
+
   if (remainingDamage <= 0) {
+    shredShield();
     events.push({
       kind: 'shield',
       timestamp,
@@ -1241,6 +1303,8 @@ function applyDamage(target, amount, source, log, events, timestamp, context = {
     const heal = remainingDamage * source.traitEffects.lifesteal;
     source.health = Math.min(source.maxHealth, source.health + heal);
   }
+
+  shredShield();
 
   events.push({
     kind: 'attack',
@@ -1914,8 +1978,13 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
       break;
     case 'single-heal':
       if (!targetAlly) break;
-      const healed = spellScaler.heal(effect.healAmount || 260);
-      applyHeal(targetAlly, healed, actor, events, timestamp);
+      {
+        const percentHeal = effect.maxHealthHealPercent
+          ? (targetAlly.maxHealth || 0) * effect.maxHealthHealPercent
+          : 0;
+        const healed = percentHeal + spellScaler.heal(effect.healAmount || 260);
+        applyHeal(targetAlly, healed, actor, events, timestamp);
+      }
       if (effect.shieldValue) {
         grantShield(targetAlly, spellScaler.shield(effect.shieldValue), {
           source: actor,
@@ -1929,6 +1998,12 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
       break;
     case 'regen':
       if (!targetAlly) break;
+      if (effect.maxHealthHealPercent) {
+        const burst = (targetAlly.maxHealth || 0) * effect.maxHealthHealPercent;
+        if (burst > 0) {
+          applyHeal(targetAlly, burst, actor, events, timestamp);
+        }
+      }
       grantBuff(
         targetAlly,
         {
@@ -1972,6 +2047,12 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         });
         allyTeam.forEach((ally) => {
           if (distance(primary, ally) <= radius) {
+            if (effect.allyHealPercent) {
+              const burst = (ally.maxHealth || 0) * effect.allyHealPercent;
+              if (burst > 0) {
+                applyHeal(ally, burst, actor, events, timestamp);
+              }
+            }
             grantBuff(
               ally,
               {
@@ -1996,6 +2077,12 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
       break;
     case 'team-regen':
       allyTeam.forEach((ally) => {
+        if (effect.maxHealthHealPercent) {
+          const burst = (ally.maxHealth || 0) * effect.maxHealthHealPercent;
+          if (burst > 0) {
+            applyHeal(ally, burst, actor, events, timestamp);
+          }
+        }
         grantBuff(
           ally,
           {
@@ -2024,12 +2111,16 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         applyDamage(targetEnemy, damage, actor, log, events, timestamp, { damageType: 'magic' });
       }
       const attackBonus = Math.round(spellScaler.effect(effect.attackBonus || 16));
+      const spellPowerBonus = effect.spellPowerBonus
+        ? Math.round(spellScaler.effect(effect.spellPowerBonus))
+        : 0;
       allyTeam.forEach((ally) => {
         grantBuff(
           ally,
           {
             duration: Math.max(3, spellScaler.duration(effect.duration || 6)),
             attackBonus,
+            ...(spellPowerBonus ? { spellPowerBonus } : {}),
           },
           { events, timestamp, source: actor, effectType: 'fury' }
         );
@@ -2051,12 +2142,18 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         const magicDefenseBonus = effect.magicDefenseBonus
           ? Math.round(spellScaler.effect(effect.magicDefenseBonus))
           : 0;
+        const spellPowerBonus = effect.spellPowerBonus
+          ? Math.round(spellScaler.effect(effect.spellPowerBonus))
+          : 0;
         const buff = {
           duration: Math.max(3.5, spellScaler.duration(effect.duration || 8)),
           defenseBonus,
         };
         if (magicDefenseBonus > 0) {
           buff.magicDefenseBonus = magicDefenseBonus;
+        }
+        if (spellPowerBonus > 0) {
+          buff.spellPowerBonus = spellPowerBonus;
         }
         grantBuff(ally, buff, { events, timestamp, source: actor, effectType: 'fortify' });
         if (effect.shieldValue) {
@@ -2077,18 +2174,29 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         .sort((a, b) => (a.role === 'frontline' ? -1 : 1) - (b.role === 'frontline' ? -1 : 1))
         .slice(0, effect.targets || 3)
         .forEach((ally) => {
-          const attackBonus = Math.round(spellScaler.effect(effect.attackBonus || 12));
-          const defenseBonus = Math.round(spellScaler.effect(effect.defenseBonus || 10));
-          const magicDefenseBonus = effect.magicDefenseBonus
-            ? Math.round(spellScaler.effect(effect.magicDefenseBonus))
-            : 0;
+          const attackBase = effect.attackBonus != null ? effect.attackBonus : 12;
+          const defenseBase = effect.defenseBonus != null ? effect.defenseBonus : null;
+          const magicDefenseBase = effect.magicDefenseBonus != null ? effect.magicDefenseBonus : null;
+          const spellPowerBase = effect.spellPowerBonus != null ? effect.spellPowerBonus : null;
+          const attackBonus = Math.round(spellScaler.effect(attackBase));
+          const defenseBonus =
+            defenseBase != null ? Math.round(spellScaler.effect(defenseBase)) : 0;
+          const magicDefenseBonus =
+            magicDefenseBase != null ? Math.round(spellScaler.effect(magicDefenseBase)) : 0;
+          const spellPowerBonus =
+            spellPowerBase != null ? Math.round(spellScaler.effect(spellPowerBase)) : 0;
           const buff = {
             duration: Math.max(3, spellScaler.duration(effect.duration || 6)),
             attackBonus,
-            defenseBonus,
           };
+          if (defenseBonus > 0) {
+            buff.defenseBonus = defenseBonus;
+          }
           if (magicDefenseBonus > 0) {
             buff.magicDefenseBonus = magicDefenseBonus;
+          }
+          if (spellPowerBonus > 0) {
+            buff.spellPowerBonus = spellPowerBonus;
           }
           grantBuff(ally, buff, { events, timestamp, source: actor, effectType: 'valor' });
           if (effect.shieldValue) {
@@ -2115,6 +2223,9 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
           });
         }
         const attackBonus = effect.attackBonus ? Math.round(spellScaler.effect(effect.attackBonus)) : 0;
+        const spellPowerBonus = effect.spellPowerBonus
+          ? Math.round(spellScaler.effect(effect.spellPowerBonus))
+          : 0;
         const defenseBonus = effect.defenseBonus ? Math.round(spellScaler.effect(effect.defenseBonus)) : 0;
         const magicDefenseBonus = effect.magicDefenseBonus
           ? Math.round(spellScaler.effect(effect.magicDefenseBonus))
@@ -2123,6 +2234,9 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         const buff = { duration: Math.max(3, spellScaler.duration(effect.duration || 6)) };
         if (attackBonus) {
           buff.attackBonus = attackBonus;
+        }
+        if (spellPowerBonus) {
+          buff.spellPowerBonus = spellPowerBonus;
         }
         if (defenseBonus) {
           buff.defenseBonus = defenseBonus;
@@ -2133,9 +2247,9 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         if (manaPerSecond) {
           buff.manaPerSecond = manaPerSecond;
         }
-        const auraType = attackBonus && (defenseBonus || magicDefenseBonus)
+        const auraType = (attackBonus || spellPowerBonus) && (defenseBonus || magicDefenseBonus)
           ? 'valor'
-          : attackBonus
+          : attackBonus || spellPowerBonus
           ? 'fury'
           : (defenseBonus || magicDefenseBonus)
           ? 'fortify'
@@ -2151,15 +2265,23 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
       if (!targetEnemy) break;
       {
         const duration = Math.max(2.4, spellScaler.duration(effect.duration || 7));
-        const damageTaken = Math.min(0.5, spellScaler.effect(effect.damageTakenBonus || 0.15));
-        const damagePenalty = Math.min(0.4, spellScaler.effect(effect.damageDealtPenalty || 0.1));
+        const damageTakenBase = effect.damageTakenBonus != null ? effect.damageTakenBonus : 0.15;
+        const damagePenaltyBase = effect.damageDealtPenalty != null ? effect.damageDealtPenalty : 0;
+        const damageTaken = damageTakenBase
+          ? Math.min(0.5, spellScaler.effect(damageTakenBase))
+          : 0;
+        const damagePenalty = damagePenaltyBase
+          ? Math.min(0.4, spellScaler.effect(damagePenaltyBase))
+          : 0;
         const healCut = effect.healReduction ? Math.min(0.9, spellScaler.effect(effect.healReduction)) : 0;
         const wardCut = effect.shieldReduction ? Math.min(0.9, spellScaler.effect(effect.shieldReduction)) : 0;
-        const debuff = {
-          duration,
-          damageTakenBonus: damageTaken,
-          damageDealtPenalty: damagePenalty,
-        };
+        const debuff = { duration };
+        if (damageTaken > 0) {
+          debuff.damageTakenBonus = damageTaken;
+        }
+        if (damagePenalty > 0) {
+          debuff.damageDealtPenalty = damagePenalty;
+        }
         if (healCut > 0) {
           debuff.healReduction = healCut;
         }
@@ -2614,7 +2736,11 @@ function simulateBattle(allies, enemies) {
     });
   }
 
-  const victorious = livingUnits(enemies).length === 0 && livingUnits(allies).length > 0;
+  const remainingAllies = livingUnits(allies);
+  const remainingEnemies = livingUnits(enemies);
+  const timedOut =
+    time >= MAX_TIME && remainingAllies.length > 0 && remainingEnemies.length > 0;
+  const victorious = remainingEnemies.length === 0 && remainingAllies.length > 0;
 
   return {
     events,
@@ -2623,6 +2749,7 @@ function simulateBattle(allies, enemies) {
     allies,
     enemies,
     victorious,
+    timedOut,
   };
 }
 
@@ -2671,5 +2798,6 @@ export function resolveCombat({ party, round = 1, placements = {}, encounter = n
     duration: outcome.duration,
     fallenAllies,
     survivingAllies,
+    timedOut: outcome.timedOut,
   };
 }

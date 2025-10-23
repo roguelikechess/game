@@ -82,9 +82,10 @@ function createUnitPanel(unit, options) {
       rarity: definition?.rarity,
       stats,
       baseStats: base,
-      skill: definition ? getUnitSkill(definition.id) : null,
+      skill: definition ? getUnitSkill(definition.id, unit.level || 1) : null,
       level: unit.level,
       items: summarizeUnitItems(unit),
+      portraitId: definition?.portraitId,
     });
   });
 

@@ -1,11 +1,14 @@
 import { getTooltip } from './tooltip.js';
 import { formatLevelBadge } from './identity.js';
+import { el } from './dom.js';
 import {
   ITEM_BLUEPRINTS,
   computeItemEffectValues,
   getItemEnhanceCost,
   getItemSellValue,
 } from '../game/items.js';
+import { getSkillLevelModifiers } from '../game/skills.js';
+import { getPortraitById } from '../data/assets.js';
 
 const ROLE_LABELS = {
   frontline: '전열',
@@ -27,15 +30,24 @@ const ITEM_TYPE_LABELS = {
   accessory: '장신구',
 };
 
+const ITEM_SLOT_LABELS = {
+  hand: '손',
+  body: '몸통',
+  trinket: '장신구',
+};
+
 const STAT_LABELS = {
   attack: '공격력',
   defense: '방어력',
   magicDefense: '마법 방어력',
   spellPower: '주문력',
-  maxHealth: '체력',
+  maxHealth: '최대 체력',
   maxMana: '마나',
   mana: '마나',
   range: '사거리',
+  speed: '이동 속도',
+  attackInterval: '공격 간격',
+  manaRegen: '마나 회복',
 };
 
 const STAT_ICONS = {
@@ -58,7 +70,56 @@ const MODIFIER_LABELS = {
   speed: '이동 속도',
   manaRegen: '마나 회복',
   cooldownReduction: '쿨타임 감소',
+  lifesteal: '생명력 흡수',
+  regenPercentPerSecond: '초당 체력 재생',
+  debuffDurationReduction: '디버프 지속 시간 감소',
+  shieldShredOnHit: '공격 시 보호막 약화',
 };
+
+function createTooltipPortraitElement(asset, root, rarity) {
+  if (!asset?.splashSources?.length) {
+    return null;
+  }
+  const sources = Array.from(new Set(asset.splashSources.filter(Boolean)));
+  if (!sources.length) {
+    return null;
+  }
+  const frame = el('div', { className: 'unit-tooltip-portrait loading' });
+  if (rarity) {
+    frame.dataset.rarity = rarity;
+  }
+  if (asset.fallback?.color) {
+    frame.style.backgroundColor = asset.fallback.color;
+  }
+  if (root) {
+    root.classList.add('has-portrait');
+  }
+  const image = new Image();
+  image.decoding = 'async';
+  image.loading = 'lazy';
+  let index = 0;
+  const tryNext = () => {
+    if (index >= sources.length) {
+      frame.remove();
+      if (root) {
+        root.classList.remove('has-portrait');
+      }
+      return;
+    }
+    const src = sources[index];
+    index += 1;
+    image.onload = () => {
+      frame.style.backgroundImage = `url(${image.src})`;
+      frame.classList.remove('loading');
+    };
+    image.onerror = () => {
+      tryNext();
+    };
+    image.src = src;
+  };
+  tryNext();
+  return frame;
+}
 
 function formatStat(value) {
   if (value === undefined || value === null) {
@@ -177,6 +238,150 @@ function describeSpellScaling(scaling) {
   return lines;
 }
 
+function formatBreakdownValue(total, base, bonus, type = 'int', suffix = '') {
+  const totalText = formatValueByType(total, type);
+  const baseText = formatValueByType(base, type);
+  const bonusText = formatValueByType(Math.abs(bonus), type);
+  if (!totalText || !baseText || !bonusText) {
+    return null;
+  }
+  const bonusSign = bonus >= 0 ? '+' : '-';
+  return `${totalText}${suffix}(${baseText}${suffix}${bonusSign}${bonusText}${suffix})`;
+}
+
+function collectSpellPowerBreakdowns(skill, stats = {}) {
+  if (!skill || !skill.spellPowerScaling) {
+    return [];
+  }
+  const spellPower = Number(stats.spellPower) || 0;
+  const scaling = skill.spellPowerScaling;
+  const effect = skill.effect || {};
+  const descriptors = [
+    { scalingKey: 'damage', key: 'damage', label: '피해', type: 'int' },
+    { scalingKey: 'damage', key: 'tickDamage', label: '초당 피해', type: 'int' },
+    { scalingKey: 'damage', key: 'dotDamage', label: '지속 피해', type: 'int' },
+    { scalingKey: 'damage', key: 'pulseDamage', label: '폭발 피해', type: 'int' },
+    { scalingKey: 'heal', key: 'healAmount', label: '즉시 회복', type: 'int' },
+    { scalingKey: 'heal', key: 'flatHeal', label: '추가 회복', type: 'int' },
+    {
+      scalingKey: 'heal',
+      keys: ['tickHeal', 'healPerSecond', 'regen'],
+      label: '초당 회복',
+      type: 'int',
+    },
+    { scalingKey: 'shield', key: 'shieldValue', label: '보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'primaryShield', label: '대상 보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'allyShield', label: '주변 보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'shield', label: '보호막', type: 'int' },
+    {
+      scalingKey: 'mana',
+      keys: ['manaPerSecond'],
+      label: '초당 마나',
+      type: 'decimal',
+      suffix: '/s',
+    },
+    {
+      scalingKey: 'mana',
+      keys: ['manaGift', 'manaGain'],
+      label: '마나 회복',
+      type: 'int',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'attackBonus',
+      label: '공격력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'defenseBonus',
+      label: '방어력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'magicDefenseBonus',
+      label: '마법 방어력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'spellPowerBonus',
+      label: '주문력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+  ];
+  const lines = [];
+  const seen = new Set();
+
+  descriptors.forEach((descriptor) => {
+    const ratio = Number(scaling[descriptor.scalingKey]);
+    if (!ratio) {
+      return;
+    }
+    const keys = descriptor.keys || [descriptor.key];
+    keys
+      .map((key) => ({ key, value: effect ? effect[key] : null }))
+      .filter(({ key }) => key && !seen.has(`${descriptor.scalingKey}:${key}`))
+      .forEach(({ key, value }) => {
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        const total = descriptor.mode === 'multiplier'
+          ? value * (1 + spellPower * ratio)
+          : value + spellPower * ratio;
+        const bonus = total - value;
+        const formatted = formatBreakdownValue(total, value, bonus, descriptor.type, descriptor.suffix || '');
+        if (!formatted) {
+          return;
+        }
+        const label = descriptor.label || key;
+        lines.push(`${label}: ${formatted}`);
+        seen.add(`${descriptor.scalingKey}:${key}`);
+      });
+  });
+  return lines;
+}
+
+function formatLevelDelta(factor) {
+  if (!Number.isFinite(factor)) {
+    return '+0%';
+  }
+  const delta = (factor - 1) * 100;
+  let decimals = 0;
+  const abs = Math.abs(delta);
+  if (abs > 0 && abs < 10) {
+    decimals = 1;
+  }
+  let text = delta.toFixed(decimals);
+  if (text === '-0.0' || text === '0.0') {
+    text = '0';
+  }
+  if (text.endsWith('.0')) {
+    text = text.slice(0, -2);
+  }
+  const sign = delta >= 0 && !text.startsWith('-') ? '+' : '';
+  return `${sign}${text}%`;
+}
+
+function summarizeLevelScaling(level) {
+  const modifiers = getSkillLevelModifiers(level);
+  if (!modifiers) {
+    return null;
+  }
+  const parts = [
+    `고정 ${formatLevelDelta(modifiers.flat)}`,
+    `계수 ${formatLevelDelta(modifiers.ratio)}`,
+    `반경 ${formatLevelDelta(modifiers.radius)}`,
+    `주문계수 ${formatLevelDelta(modifiers.spell)}`,
+  ];
+  return `레벨 보정: ${parts.join(' · ')}`;
+}
+
 function formatComparison(entry, baseValue, totalValue) {
   const { type = 'int', suffix = '' } = entry;
   const baseText = formatValueByType(baseValue, type);
@@ -255,6 +460,7 @@ export function buildUnitTooltip({
   skill,
   items = [],
   extraLines = [],
+  portraitId = null,
 }) {
   const lines = [];
   if (name) {
@@ -313,6 +519,19 @@ export function buildUnitTooltip({
     if (skill.description) {
       lines.push(skill.description);
     }
+    if (level != null) {
+      const scalingSummary = summarizeLevelScaling(level);
+      if (scalingSummary) {
+        lines.push(scalingSummary);
+      }
+    }
+    const spellBreakdowns = collectSpellPowerBreakdowns(skill, stats);
+    if (spellBreakdowns.length) {
+      lines.push('주요 수치:');
+      spellBreakdowns.forEach((entry) => {
+        lines.push(` - ${entry}`);
+      });
+    }
     const scalingDetails = describeSpellScaling(skill.spellPowerScaling);
     if (scalingDetails.length) {
       lines.push('주문력 계수:');
@@ -339,7 +558,16 @@ export function buildUnitTooltip({
   if (extraLines.length) {
     lines.push(...extraLines);
   }
-  return lines.join('\n');
+  const root = el('div', { className: 'unit-tooltip' });
+  const portraitAsset = portraitId ? getPortraitById(portraitId) : null;
+  const portraitElement = createTooltipPortraitElement(portraitAsset, root, rarity);
+  if (portraitElement) {
+    root.appendChild(portraitElement);
+  }
+  const body = el('div', { className: 'unit-tooltip-body' });
+  body.textContent = lines.join('\n');
+  root.appendChild(body);
+  return root;
 }
 
 export function buildItemTooltip(item) {
@@ -365,7 +593,8 @@ export function buildItemTooltip(item) {
   }
 
   if (blueprint?.slot) {
-    lines.push(`슬롯: ${blueprint.slot}`);
+    const slotLabel = ITEM_SLOT_LABELS[blueprint.slot] || blueprint.slot;
+    lines.push(`슬롯: ${slotLabel}`);
   }
 
   const { stats, modifiers } = computeItemEffectValues(item.blueprintId, rarity, upgradeLevel);
@@ -389,6 +618,20 @@ export function buildItemTooltip(item) {
       lines.push(`${label}: ×${value.toFixed(2)}`);
     } else if (modifierKey === 'cooldownReduction') {
       lines.push(`${label}: ${Math.round(value * 100)}%`);
+    } else if (
+      ['lifesteal', 'regenPercentPerSecond', 'debuffDurationReduction', 'shieldShredOnHit', 'speed'].includes(
+        modifierKey,
+      )
+    ) {
+      const percent = value * 100;
+      let decimals = 0;
+      const absPercent = Math.abs(percent);
+      if (absPercent > 0 && absPercent < 10) {
+        decimals = 1;
+      }
+      const formattedPercent = percent.toFixed(decimals).replace(/\.0$/, '');
+      const sign = percent >= 0 ? '+' : '';
+      lines.push(`${label}: ${sign}${formattedPercent}%`);
     } else {
       const prefix = value >= 0 ? '+' : '';
       const formatted = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value;

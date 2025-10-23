@@ -68,6 +68,22 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'stun-strike', damageMultiplier: 1.5, stunDuration: 2.4 },
     cooldown: 14,
   },
+  'aurora-bulwark': {
+    name: '오로라의 보루',
+    jobId: 'knight',
+    description:
+      '반경 160의 아군에게 260 보호막과 7초 동안 방어력 +24, 마법 방어력 +24를 부여하며 적에게 70% 피해를 준다.',
+    effect: {
+      kind: 'ward-pulse',
+      radius: 160,
+      shieldValue: 260,
+      defenseBonus: 24,
+      magicDefenseBonus: 24,
+      duration: 7,
+      damageMultiplier: 0.7,
+    },
+    cooldown: 15,
+  },
   'guardian-oath': {
     name: '수호의 서약',
     jobId: 'knight',
@@ -144,6 +160,13 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'warcry', healPercent: 0.12, fearDuration: 1.6 },
     cooldown: 16,
   },
+  'tremor-guard': {
+    name: '진동 방패강타',
+    jobId: 'warrior',
+    description: '방패를 내려쳐 반경 110의 적에게 120% 피해와 3초 동안 35% 둔화를 가한다.',
+    effect: { kind: 'ground-slam', radius: 110, damageMultiplier: 1.2, slow: 0.35 },
+    cooldown: 12,
+  },
   'seismic-crash': {
     name: '지각 붕괴',
     jobId: 'warrior',
@@ -216,6 +239,13 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'seeker-barrage', targets: 5, damageMultiplier: 0.78, ramp: 0.16, pierce: 0.4 },
     cooldown: 15,
   },
+  'moonlight-salvo': {
+    name: '월광 포화',
+    jobId: 'archer',
+    description: '4명의 적을 추적해 90% 피해를 주고 타격마다 15%씩 강해지며 18% 둔화를 남긴다.',
+    effect: { kind: 'seeker-barrage', targets: 4, damageMultiplier: 0.9, ramp: 0.15, slow: 0.18, pierce: 0.25 },
+    cooldown: 13,
+  },
   'arcane-comet': {
     name: '비전 혜성',
     jobId: 'mage',
@@ -248,6 +278,14 @@ const SKILL_BLUEPRINTS = {
     cooldown: 5.5,
     spellPowerScaling: { damage: 0.55, effect: 0.0009, mana: 0.12 },
   },
+  'glacial-prism': {
+    name: '빙결 프리즘',
+    jobId: 'mage',
+    description: '2차례의 냉기 파동으로 각 112% 피해를 주고 맞은 적을 1.8초간 28% 둔화시킨다.',
+    effect: { kind: 'arcane-cascade', pulses: 2, damageMultiplier: 1.12, radius: 130, slow: 0.28 },
+    cooldown: 6,
+    spellPowerScaling: { damage: 0.58, effect: 0.0008, duration: 0.00045 },
+  },
   'celestial-burst': {
     name: '천구 폭발',
     jobId: 'mage',
@@ -257,108 +295,158 @@ const SKILL_BLUEPRINTS = {
     cooldown: 6.5,
     spellPowerScaling: { damage: 0.6, effect: 0.001, mana: 0.1 },
   },
+  'prismatic-surge': {
+    name: '프리즘 폭류',
+    jobId: 'mage',
+    description: '3차례 프리즘 광선을 발사해 각 118% 피해를 주고 2.5초 동안 받는 피해를 10% 증가시킨다.',
+    effect: { kind: 'arcane-cascade', pulses: 3, damageMultiplier: 1.18, damageTakenBonus: 0.1, manaGift: 16 },
+    cooldown: 5.5,
+    spellPowerScaling: { damage: 0.62, effect: 0.00085, mana: 0.12 },
+  },
   'radiant-mending': {
     name: '광휘 치유',
     jobId: 'healer',
-    description: '아군 하나를 280 회복시키고 140의 보호막을 씌운다.',
-    effect: { kind: 'single-heal', healAmount: 280, shieldValue: 140 },
+    description: '아군 하나를 320 회복시키고 최대 체력의 12%를 추가로 회복시킨다.',
+    effect: { kind: 'single-heal', healAmount: 320, maxHealthHealPercent: 0.12 },
     cooldown: 7,
-    spellPowerScaling: { heal: 0.9, shield: 0.45 },
+    spellPowerScaling: { heal: 0.92 },
   },
   'guardian-prayer': {
     name: '수호 기도',
     jobId: 'healer',
-    description: '6초 동안 매초 36씩 회복시키고 120 보호막을 더해준다.',
-    effect: { kind: 'regen', duration: 6, tickHeal: 36, shieldValue: 120 },
+    description: '즉시 최대 체력의 8%를 회복시키고 6초 동안 매초 42씩 회복시킨다.',
+    effect: {
+      kind: 'regen',
+      duration: 6,
+      tickHeal: 42,
+      maxHealthHealPercent: 0.08,
+    },
     cooldown: 12,
-    spellPowerScaling: { heal: 0.25, duration: 0.0006, shield: 0.32 },
+    spellPowerScaling: { heal: 0.28, duration: 0.0006 },
   },
   'verdant-bloom': {
     name: '신록의 꽃',
     jobId: 'healer',
     description:
-      '주대상을 체력의 20%에 180을 더해 치유하고 6초간 초당 28 회복과 160 보호막을 부여하며 주변 120 범위 아군에 90 보호막을 나눠 준다.',
+      '주대상을 체력의 22%에 160을 더해 치유하고 6초간 초당 32 회복을 유지시키며 주변 120 범위 아군에게 최대 체력의 6%를 회복시킨다.',
     effect: {
       kind: 'renewal-burst',
-      primaryHealPercent: 0.2,
-      flatHeal: 180,
+      primaryHealPercent: 0.22,
+      flatHeal: 160,
       radius: 120,
-      regen: 28,
+      regen: 32,
       duration: 6,
-      primaryShield: 160,
-      allyShield: 90,
+      allyHealPercent: 0.06,
     },
     cooldown: 9,
-    spellPowerScaling: { heal: 0.6, effect: 0.0006, shield: 0.35 },
+    spellPowerScaling: { heal: 0.62 },
   },
   'revitalizing-anthem': {
     name: '생기 넘치는 송가',
     jobId: 'healer',
-    description: '8초 동안 아군 전원을 매초 18 회복시키고 마나를 6씩 채우며 80 보호막을 부여한다.',
-    effect: { kind: 'team-regen', duration: 8, healPerSecond: 18, manaPerSecond: 6, shieldValue: 80 },
+    description:
+      '즉시 최대 체력의 6%를 회복시키고 8초 동안 아군 전원을 매초 20 회복시키며 마나를 7씩 채운다.',
+    effect: {
+      kind: 'team-regen',
+      duration: 8,
+      healPerSecond: 20,
+      manaPerSecond: 7,
+      maxHealthHealPercent: 0.06,
+    },
     cooldown: 18,
-    spellPowerScaling: { heal: 0.22, mana: 0.06, duration: 0.0004, shield: 0.28 },
+    spellPowerScaling: { heal: 0.26, mana: 0.07, duration: 0.0004 },
   },
   'spear-of-dawn': {
     name: '새벽의 창',
     jobId: 'consecrator',
-    description: '110% 피해를 주고 6초간 공격력 +18과 90 보호막을 아군에게 부여한다.',
-    effect: { kind: 'smite-buff', damageMultiplier: 1.1, attackBonus: 18, duration: 6, shieldValue: 90 },
+    description: '110% 피해를 주고 6초간 공격력 +42와 120 보호막을 아군에게 부여한다.',
+    effect: {
+      kind: 'smite-buff',
+      damageMultiplier: 1.1,
+      attackBonus: 42,
+      duration: 6,
+      shieldValue: 120,
+    },
     cooldown: 9,
-    spellPowerScaling: { damage: 0.55, effect: 0.0004, shield: 0.28 },
+    spellPowerScaling: { damage: 0.55, shield: 0.32 },
   },
   'holy-bastion': {
     name: '성역의 장벽',
     jobId: 'consecrator',
-    description: '8초 동안 방어력 +24, 마법 저항 +18을 부여하고 140 보호막을 둘러준다.',
-    effect: { kind: 'fortify', defenseBonus: 24, magicDefenseBonus: 18, duration: 8, shieldValue: 140 },
+    description: '8초 동안 방어력 +42, 마법 저항 +34를 부여하고 180 보호막을 둘러준다.',
+    effect: {
+      kind: 'fortify',
+      defenseBonus: 42,
+      magicDefenseBonus: 34,
+      duration: 8,
+      shieldValue: 180,
+    },
     cooldown: 15,
-    spellPowerScaling: { effect: 0.0007, duration: 0.0005, shield: 0.38 },
+    spellPowerScaling: { effect: 0.0005, duration: 0.0005, shield: 0.4 },
   },
   'radiant-chain': {
     name: '광휘 연쇄',
     jobId: 'consecrator',
-    description: '3명의 아군에게 6초간 공격력 +12, 방어력 +12, 마법 저항 +10과 100 보호막을 순차로 건넨다.',
+    description: '3명의 아군에게 6초간 공격력 +28과 120 보호막을 순차로 전한다.',
     effect: {
       kind: 'chain-buff',
-      attackBonus: 12,
-      defenseBonus: 12,
-      magicDefenseBonus: 10,
+      attackBonus: 28,
       targets: 3,
       duration: 6,
-      shieldValue: 100,
+      shieldValue: 120,
     },
     cooldown: 13,
-    spellPowerScaling: { effect: 0.0005, duration: 0.0004, shield: 0.32 },
+    spellPowerScaling: { effect: 0.00035, duration: 0.0004, shield: 0.3 },
   },
   'dawn-sanctuary': {
     name: '여명의 성역',
     jobId: 'consecrator',
     description:
-      '7초 동안 아군에게 공격력·방어력·마법 저항 +14를 부여하고 초당 마나 6과 160 보호막을 제공한다.',
+      '7초 동안 아군에게 주문력 +26과 초당 마나 8을 부여하고 140 보호막을 덧씌운다.',
     effect: {
       kind: 'sanctify-wave',
       duration: 7,
-      attackBonus: 14,
-      defenseBonus: 14,
-      shieldValue: 160,
-      manaPerSecond: 6,
-      magicDefenseBonus: 14,
+      spellPowerBonus: 26,
+      shieldValue: 140,
+      manaPerSecond: 8,
     },
     cooldown: 14,
-    spellPowerScaling: { shield: 0.45, effect: 0.0005, mana: 0.08 },
+    spellPowerScaling: { shield: 0.38, effect: 0.0005, mana: 0.09 },
+  },
+  'luminous-veil': {
+    name: '찬란한 장막',
+    jobId: 'consecrator',
+    description:
+      '7초 동안 아군에게 주문력 +32, 방어력 +16, 마법 방어력 +16과 180 보호막, 초당 마나 9를 부여한다.',
+    effect: {
+      kind: 'sanctify-wave',
+      duration: 7,
+      spellPowerBonus: 32,
+      defenseBonus: 16,
+      magicDefenseBonus: 16,
+      shieldValue: 180,
+      manaPerSecond: 9,
+    },
+    cooldown: 15,
+    spellPowerScaling: { effect: 0.00055, duration: 0.0004, shield: 0.38, mana: 0.09 },
+  },
+  'gloom-ritual': {
+    name: '그늘 의식',
+    jobId: 'warlock',
+    description: '대상을 6초 동안 저주해 받는 피해를 18% 늘리고 치유 효과를 25% 약화시킨다.',
+    effect: { kind: 'curse', damageTakenBonus: 0.18, healReduction: 0.25, duration: 6 },
+    cooldown: 10,
+    spellPowerScaling: { effect: 0.00045, duration: 0.00035 },
   },
   'shadow-hex': {
     name: '그림자 저주',
     jobId: 'warlock',
-    description: '7초 동안 대상이 받는 피해를 18% 늘리고 가하는 피해를 12% 줄이며 치유·보호 효과를 35%/28% 감소시킨다.',
+    description: '7초 동안 대상이 받는 피해를 20% 늘리고 치유 효과를 32% 약화시킨다.',
     effect: {
       kind: 'curse',
-      damageTakenBonus: 0.18,
-      damageDealtPenalty: 0.12,
+      damageTakenBonus: 0.2,
       duration: 7,
-      healReduction: 0.35,
-      shieldReduction: 0.28,
+      healReduction: 0.32,
     },
     cooldown: 9,
     spellPowerScaling: { effect: 0.0006, duration: 0.0004 },
@@ -366,54 +454,44 @@ const SKILL_BLUEPRINTS = {
   'void-siphon': {
     name: '공허 흡수',
     jobId: 'warlock',
-    description:
-      '160 피해를 주고 그중 70%만큼 치유하며 마나를 30 회복하고 4초간 대상의 치유·보호를 25%/20% 약화시킨다.',
+    description: '190 피해를 주고 그중 65%만큼 치유하며 마나를 32 회복한다.',
     effect: {
       kind: 'drain',
-      damage: 160,
-      healRatio: 0.7,
-      manaGain: 30,
-      healReduction: 0.25,
-      shieldReduction: 0.2,
-      debuffDuration: 4,
+      damage: 190,
+      healRatio: 0.65,
+      manaGain: 32,
     },
     cooldown: 11,
-    spellPowerScaling: { damage: 0.55, heal: 0.42, mana: 0.12, effect: 0.0005 },
+    spellPowerScaling: { damage: 0.55, heal: 0.42, mana: 0.12 },
   },
   'nightmare-sigil': {
     name: '악몽의 인장',
     jobId: 'warlock',
-    description: '반경 120에 6초 동안 초당 32 피해를 주고 치유·보호 효과를 22%/16% 줄인다.',
+    description: '반경 120에 6초 동안 초당 36 피해를 주고 치유 효과를 26% 줄인다.',
     effect: {
       kind: 'damage-over-time',
       radius: 120,
-      tickDamage: 32,
+      tickDamage: 36,
       duration: 6,
-      healReduction: 0.22,
-      shieldReduction: 0.16,
+      healReduction: 0.26,
     },
     cooldown: 16,
-    spellPowerScaling: { damage: 0.32, duration: 0.0005 },
+    spellPowerScaling: { damage: 0.34, duration: 0.0005, effect: 0.00045 },
   },
   'void-collapse': {
     name: '공허 붕괴',
     jobId: 'warlock',
-    description:
-      '반경 120에 120% 피해를 가하고 5초간 초당 32 피해와 22% 둔화를 주며 마나 18을 태우고 받는 피해를 10% 늘리며 치유·보호를 28%/24% 감소시킨다.',
+    description: '반경 120에 125% 피해를 가하고 5초간 초당 36 피해와 24% 둔화를 남긴다.',
     effect: {
       kind: 'void-collapse',
-      damageMultiplier: 1.2,
+      damageMultiplier: 1.25,
       radius: 120,
-      dotDamage: 32,
+      dotDamage: 36,
       dotDuration: 5,
-      slow: 0.22,
-      manaBurn: 18,
-      damageTakenBonus: 0.1,
-      healReduction: 0.28,
-      shieldReduction: 0.24,
+      slow: 0.24,
     },
     cooldown: 12,
-    spellPowerScaling: { damage: 0.6, effect: 0.0006, mana: 0.06 },
+    spellPowerScaling: { damage: 0.62, effect: 0.00045 },
   },
 };
 
@@ -435,6 +513,53 @@ const RARITY_COOLDOWN_FACTORS = {
 
 const NO_SCALE_KEYS = new Set(['duration', 'hit', 'manaCost', 'threshold', 'shots', 'targets', 'hits', 'pulses']);
 const CLAMP_PERCENT_KEYS = new Set(['slow', 'damageTakenBonus', 'damageDealtPenalty', 'redirectPercent', 'healPercent']);
+
+const LEVEL_SKIP_KEYS = new Set([
+  'duration',
+  'fearDuration',
+  'stunDuration',
+  'slowDuration',
+  'manaCost',
+  'threshold',
+  'redirectPercent',
+  'guardRedirect',
+  'targets',
+  'hits',
+  'pulses',
+  'shots',
+  'tickInterval',
+  'maxStacks',
+  'maxBounces',
+  'slowMultiplier',
+]);
+
+const LEVEL_RADIUS_KEYS = new Set(['radius', 'width', 'length', 'arcRadius']);
+
+const LEVEL_RATIO_KEYS = new Set([
+  'damageMultiplier',
+  'splashMultiplier',
+  'ramp',
+  'healPercent',
+  'primaryHealPercent',
+  'allyHealPercent',
+  'maxHealthHealPercent',
+  'healRatio',
+  'slow',
+  'critBonus',
+  'pierce',
+  'attackIntervalModifier',
+  'damageTakenBonus',
+  'damageDealtPenalty',
+  'healReduction',
+  'shieldReduction',
+  'manaRefundPercent',
+]);
+
+const LEVEL_FLAT_GROWTH = 0.22;
+const LEVEL_RATIO_GROWTH = 0.03;
+const LEVEL_RADIUS_GROWTH = 0.03;
+const SPELL_POWER_BASE_MOD = 0.98;
+const SPELL_POWER_LEVEL_GROWTH = 0.025;
 
 function formatSkillName(characterName, blueprintName) {
   return blueprintName;
@@ -488,4 +613,112 @@ function scaleSkillEffect(effect, multiplier) {
     scaled[key] = parseFloat(nextValue.toFixed(2));
   });
   return scaled;
+}
+
+function normalizeLevel(level) {
+  const numeric = Number(level);
+  if (!Number.isFinite(numeric)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(numeric));
+}
+
+function getLevelSteps(level) {
+  return Math.max(0, normalizeLevel(level) - 1);
+}
+
+function computeLevelModifiers(level) {
+  const steps = getLevelSteps(level);
+  const flat = Math.pow(1 + LEVEL_FLAT_GROWTH, steps);
+  const ratio = 1 + LEVEL_RATIO_GROWTH * steps;
+  const radius = 1 + LEVEL_RADIUS_GROWTH * steps;
+  const spellBase = steps > 0 ? SPELL_POWER_BASE_MOD : 1;
+  const spell = spellBase * Math.pow(1 + SPELL_POWER_LEVEL_GROWTH, steps);
+  return { steps, flat, ratio, radius, spell };
+}
+
+function scaleNumericValueByLevel(key, value, modifiers) {
+  if (!Number.isFinite(value) || !modifiers || modifiers.steps <= 0) {
+    return value;
+  }
+  if (LEVEL_SKIP_KEYS.has(key)) {
+    return value;
+  }
+  if (LEVEL_RADIUS_KEYS.has(key)) {
+    const scaled = value * modifiers.radius;
+    if (Math.abs(scaled) >= 10 || Number.isInteger(value)) {
+      return Math.round(scaled);
+    }
+    return parseFloat(scaled.toFixed(2));
+  }
+  if (LEVEL_RATIO_KEYS.has(key)) {
+    let scaled = value * modifiers.ratio;
+    if (CLAMP_PERCENT_KEYS.has(key)) {
+      scaled = Math.min(0.95, Math.max(-0.95, scaled));
+    }
+    const precision = Math.abs(scaled) < 1 ? 3 : 2;
+    return parseFloat(scaled.toFixed(precision));
+  }
+  let scaled = value * modifiers.flat;
+  if (CLAMP_PERCENT_KEYS.has(key)) {
+    scaled = Math.min(0.95, Math.max(-0.95, scaled));
+  }
+  if (Math.abs(scaled) >= 10 || Number.isInteger(value)) {
+    return Math.round(scaled);
+  }
+  return parseFloat(scaled.toFixed(2));
+}
+
+function scaleEffectByLevel(effect, modifiers) {
+  if (!effect) {
+    return effect;
+  }
+  if (Array.isArray(effect)) {
+    return effect.map((entry) => scaleEffectByLevel(entry, modifiers));
+  }
+  const scaled = { ...effect };
+  Object.entries(scaled).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      scaled[key] = scaleEffectByLevel(value, modifiers);
+      return;
+    }
+    if (typeof value !== 'number') {
+      return;
+    }
+    scaled[key] = scaleNumericValueByLevel(key, value, modifiers);
+  });
+  return scaled;
+}
+
+function scaleSpellPowerRatios(scaling, modifiers) {
+  if (!scaling) {
+    return scaling;
+  }
+  const scaled = {};
+  Object.entries(scaling).forEach(([key, value]) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const adjusted = value * modifiers.spell;
+    scaled[key] = parseFloat(adjusted.toFixed(4));
+  });
+  return scaled;
+}
+
+export function getSkillLevelModifiers(level = 1) {
+  return computeLevelModifiers(level);
+}
+
+export function scaleSkillForLevel(skill, level = 1) {
+  if (!skill) {
+    return null;
+  }
+  const modifiers = computeLevelModifiers(level);
+  const leveled = { ...skill };
+  leveled.level = normalizeLevel(level);
+  leveled.effect = skill.effect ? scaleEffectByLevel(skill.effect, modifiers) : skill.effect;
+  leveled.spellPowerScaling = skill.spellPowerScaling
+    ? scaleSpellPowerRatios(skill.spellPowerScaling, modifiers)
+    : skill.spellPowerScaling;
+  return leveled;
 }
