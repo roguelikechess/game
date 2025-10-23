@@ -75,39 +75,35 @@ function defaultPosition(line, index, total) {
 
 function toStylePosition(position) {
   const halfWidth = FIELD_WIDTH / 2;
-  const xPercent = Math.max(0, Math.min(halfWidth, position.x)) / halfWidth * 100;
-  const yPercent = Math.max(0, Math.min(FIELD_HEIGHT, position.y)) / FIELD_HEIGHT * 100;
+  const clampedX = Math.max(0, Math.min(halfWidth, position.x));
+  const clampedY = Math.max(0, Math.min(FIELD_HEIGHT, position.y));
+  const xPercent = (clampedX / FIELD_WIDTH) * 100;
+  const yPercent = (clampedY / FIELD_HEIGHT) * 100;
   return { xPercent, yPercent };
 }
 
-function renderEncounterPreview(encounter) {
-  const wrapper = el('div', { className: 'encounter-preview embedded' });
-  const title = el('h3', { text: '예상 적 편성' });
-  attachTooltip(
-    title,
-    () =>
-      encounter
-        ? `라운드 ${encounter.round} 예상 적 ${encounter.enemies.length}명`
-        : '정찰 정보가 수집되는 중입니다. 전투를 시작하면 최신 정보로 갱신됩니다.',
-    { anchor: 'element' }
-  );
-  wrapper.appendChild(title);
-
-  if (!encounter) {
-    return wrapper;
+function applyBattleBackground(board, encounter) {
+  if (!board) {
+    return;
   }
-
-  const board = el('div', { className: 'encounter-preview-board map-layout' });
-  if (encounter.background?.src) {
-    board.style.backgroundImage = `url(${encounter.background.src})`;
+  board.classList.remove('has-image');
+  board.style.backgroundImage = '';
+  board.style.backgroundColor = '';
+  const background = encounter?.background || null;
+  if (background?.src) {
+    board.style.backgroundImage = `url(${background.src})`;
     board.classList.add('has-image');
-  } else if (encounter.background?.fallbackColor) {
-    board.style.backgroundColor = encounter.background.fallbackColor;
+  } else if (background?.fallbackColor) {
+    board.style.backgroundColor = background.fallbackColor;
   }
-  board.appendChild(el('div', { className: 'encounter-center-line' }));
+}
 
+function renderEnemyPreview(board, encounter) {
+  if (!board || !encounter?.enemies?.length) {
+    return;
+  }
   encounter.enemies.forEach((enemy) => {
-    const token = el('div', { className: 'encounter-token map-token' });
+    const token = el('div', { className: 'encounter-token map-token enemy-preview' });
     token.title = enemy.name;
     applySpritePreview(token, enemy.sprite);
     const job = enemy.jobId ? getJobById(enemy.jobId) : null;
@@ -120,28 +116,19 @@ function renderEncounterPreview(encounter) {
         stats: enemy.stats,
         skill: enemy.skill,
         level: enemy.level,
+        portraitId: enemy.portraitId,
       })
     );
     token.appendChild(el('span', { className: 'encounter-token-name', text: enemy.name }));
 
-    const percentX = Math.min(Math.max(enemy.x || FIELD_WIDTH * 0.7, 0), FIELD_WIDTH) / FIELD_WIDTH * 100;
-    const percentY = Math.min(Math.max(enemy.y || FIELD_HEIGHT * 0.5, 0), FIELD_HEIGHT) / FIELD_HEIGHT * 100;
+    const safeX = Math.min(Math.max(enemy.x ?? FIELD_WIDTH * 0.7, FIELD_WIDTH / 2), FIELD_WIDTH);
+    const safeY = Math.min(Math.max(enemy.y ?? FIELD_HEIGHT * 0.5, 0), FIELD_HEIGHT);
+    const percentX = (safeX / FIELD_WIDTH) * 100;
+    const percentY = (safeY / FIELD_HEIGHT) * 100;
     token.style.left = `${percentX}%`;
     token.style.top = `${percentY}%`;
     board.appendChild(token);
   });
-
-  if (!encounter.enemies.length) {
-    board.appendChild(
-      el('div', {
-        className: 'encounter-empty map-note',
-        text: '정찰된 적이 없습니다.',
-      })
-    );
-  }
-
-  wrapper.appendChild(board);
-  return wrapper;
 }
 
 export function createPlacementBoard({ party, placements = {}, onChange, encounter = null }) {
@@ -154,11 +141,16 @@ export function createPlacementBoard({ party, placements = {}, onChange, encount
   );
   boardWrapper.appendChild(placementTitle);
 
-  const layout = el('div', { className: 'placement-board-row' });
-  const board = el('div', { className: 'placement-board' });
-  layout.appendChild(board);
-  layout.appendChild(renderEncounterPreview(encounter));
-  boardWrapper.appendChild(layout);
+  const board = el('div', { className: 'placement-board map-layout' });
+  applyBattleBackground(board, encounter);
+  board.appendChild(el('div', { className: 'placement-center-line' }));
+  if (!encounter?.enemies?.length) {
+    board.appendChild(
+      el('div', { className: 'encounter-empty map-note', text: '정찰된 적이 없습니다.' })
+    );
+  }
+  renderEnemyPreview(board, encounter);
+  boardWrapper.appendChild(board);
 
   const tokens = [];
   const lines = ['frontline', 'midline', 'backline'];
@@ -202,6 +194,7 @@ export function createPlacementBoard({ party, placements = {}, onChange, encount
           skill: definition ? getUnitSkill(definition.id, unit.level || 1) : null,
           level: unit.level,
           items: summarizeUnitItems(unit),
+          portraitId: definition?.portraitId,
         });
       });
       token.appendChild(el('span', { className: 'token-label', text: definition?.name || 'Unit' }));
@@ -214,7 +207,8 @@ export function createPlacementBoard({ party, placements = {}, onChange, encount
         const rect = board.getBoundingClientRect();
         const relX = event.clientX - rect.left;
         const relY = event.clientY - rect.top;
-        const clampedX = Math.max(0, Math.min(relX, rect.width));
+        const usableWidth = rect.width * 0.5;
+        const clampedX = Math.max(0, Math.min(relX, usableWidth));
         const clampedY = Math.max(0, Math.min(relY, rect.height));
         const percentX = (clampedX / rect.width) * 100;
         const percentY = (clampedY / rect.height) * 100;
@@ -228,10 +222,11 @@ export function createPlacementBoard({ party, placements = {}, onChange, encount
         token.removeEventListener('pointerup', commitPosition);
         token.removeEventListener('pointercancel', commitPosition);
         const rect = board.getBoundingClientRect();
-        const relX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+        const usableWidth = rect.width * 0.5;
+        const relX = Math.max(0, Math.min(event.clientX - rect.left, usableWidth));
         const relY = Math.max(0, Math.min(event.clientY - rect.top, rect.height));
         const position = {
-          x: (relX / rect.width) * (FIELD_WIDTH / 2),
+          x: (relX / rect.width) * FIELD_WIDTH,
           y: (relY / rect.height) * FIELD_HEIGHT,
         };
         if (typeof onChange === 'function') {

@@ -140,6 +140,7 @@ export function createRosterPage(roster, { augments = [], party = null } = {}) {
         baseStats,
         skill,
         extraLines,
+        portraitId: definition?.portraitId,
       })
     );
 

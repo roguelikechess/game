@@ -1453,6 +1453,46 @@ function renderHeader() {
   statusBar.appendChild(el('span', { className: 'status-pill', text: `골드 ${goldValue}` }));
   header.appendChild(statusBar);
 
+  const companyRow = el('div', { className: 'header-company-row' });
+  const companyLevel = run.companyLevel || 1;
+  const companyExp = run.companyExperience || 0;
+  const companyToNext = Math.max(1, run.companyExpToNext || 1);
+  const companyProgress = Math.max(0, Math.min(1, companyExp / companyToNext));
+
+  const levelBadge = el('div', {
+    className: 'company-level-pill',
+    text: `용병단 Lv.${companyLevel}`,
+  });
+  const progressBar = el('div', { className: 'company-progress-bar' });
+  const progressFill = el('div', { className: 'company-progress-fill' });
+  progressFill.style.width = `${Math.round(companyProgress * 100)}%`;
+  progressBar.appendChild(progressFill);
+  const progressText = el('span', {
+    className: 'company-progress-text',
+    text: `${companyExp} / ${companyToNext} EXP`,
+  });
+
+  companyRow.appendChild(levelBadge);
+  companyRow.appendChild(progressBar);
+  companyRow.appendChild(progressText);
+
+  const experienceOffer = getExperiencePurchaseOffer(run);
+  if (experienceOffer) {
+    const offerButton = el('button', {
+      className: 'nav-button small',
+      text: `경험치 구매 (-${experienceOffer.cost} 골드 / +${experienceOffer.experience} EXP)`,
+      type: 'button',
+    });
+    offerButton.disabled = run.gameOver || run.gold < experienceOffer.cost;
+    offerButton.addEventListener('click', () => {
+      if (!offerButton.disabled) {
+        handleBuyExperience();
+      }
+    });
+    companyRow.appendChild(offerButton);
+  }
+  header.appendChild(companyRow);
+
   const nav = el('nav', { className: 'navbar' });
   const navDescriptions = {
     main: '현재 도전 상황과 전투 준비를 모두 확인할 수 있습니다.',
@@ -1477,7 +1517,117 @@ function renderHeader() {
     }
     nav.appendChild(button);
   });
-  header.appendChild(nav);
+
+  const audioMenu = (() => {
+    const details = el('details', { className: 'nav-audio-menu' });
+    const summary = el('summary', { text: '사운드 옵션' });
+    details.appendChild(summary);
+
+    const panel = el('div', { className: 'nav-audio-panel' });
+    const buildSelect = (labelText, tracks, selected, onChange) => {
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        return null;
+      }
+      const field = el('label', { className: 'nav-audio-field' });
+      field.appendChild(el('span', { className: 'nav-audio-label', text: labelText }));
+      const select = el('select', { className: 'nav-audio-select' });
+      tracks.forEach((track) => {
+        const option = el('option', {
+          value: track.id,
+          text: track.label || track.id,
+        });
+        if (track.id === selected) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+      if (selected && tracks.some((track) => track.id === selected)) {
+        select.value = selected;
+      }
+      select.addEventListener('change', (event) => onChange(event.target.value));
+      field.appendChild(select);
+      return field;
+    };
+
+    const lobbySelect = buildSelect('로비 배경음', LOBBY_BGM, state.audioSelection.lobby, (value) =>
+      handleAudioChange('lobby', value)
+    );
+    if (lobbySelect) {
+      panel.appendChild(lobbySelect);
+    }
+
+    const battleSelect = buildSelect('전투 배경음', BATTLE_BGM, state.audioSelection.battle, (value) =>
+      handleAudioChange('battle', value)
+    );
+    if (battleSelect) {
+      panel.appendChild(battleSelect);
+    }
+
+    const effectSelect = buildSelect('효과음', EFFECT_SETS, state.audioSelection.effects, (value) =>
+      handleAudioChange('effects', value)
+    );
+    if (effectSelect) {
+      panel.appendChild(effectSelect);
+    }
+
+    const musicSettings = {
+      volume: Math.round(Math.max(0, Math.min(1, state.audioSettings?.musicVolume ?? 0.8)) * 100),
+      muted: !!state.audioSettings?.musicMuted,
+    };
+
+    const actions = el('div', { className: 'nav-audio-actions' });
+    const muteButton = el('button', {
+      className: `nav-button small${musicSettings.muted ? ' secondary' : ''}`,
+      text: musicSettings.muted ? 'BGM 켜기' : 'BGM 끄기',
+      type: 'button',
+    });
+    muteButton.addEventListener('click', () => {
+      handleAudioSettingsChange({ musicMuted: !musicSettings.muted });
+    });
+    actions.appendChild(muteButton);
+
+    const volumeField = el('label', { className: 'nav-audio-volume' });
+    const volumeLabel = el('span', {
+      className: 'nav-audio-volume-label',
+      text: `BGM 음량 ${musicSettings.volume}%`,
+    });
+    volumeField.appendChild(volumeLabel);
+    const slider = el('input', {
+      type: 'range',
+      min: '0',
+      max: '100',
+      value: `${musicSettings.volume}`,
+      step: '1',
+    });
+    slider.addEventListener('input', (event) => {
+      const raw = Number(event.target.value);
+      if (!Number.isFinite(raw)) {
+        return;
+      }
+      const scaled = Math.max(0, Math.min(100, raw));
+      volumeLabel.textContent = `BGM 음량 ${Math.round(scaled)}%`;
+      handleAudioSettingsChange({ musicVolume: scaled / 100 }, { render: false, persist: false });
+    });
+    slider.addEventListener('change', (event) => {
+      const raw = Number(event.target.value);
+      if (!Number.isFinite(raw)) {
+        return;
+      }
+      const scaled = Math.max(0, Math.min(100, raw));
+      handleAudioSettingsChange({ musicVolume: scaled / 100 });
+    });
+    volumeField.appendChild(slider);
+    actions.appendChild(volumeField);
+
+    if (panel.childElementCount || actions.childElementCount) {
+      panel.appendChild(actions);
+    }
+
+    details.appendChild(panel);
+    return details;
+  })();
+
+  nav.appendChild(audioMenu);
   const exportButton = el('button', { className: 'nav-button', text: '진행도 내보내기' });
   exportButton.addEventListener('click', handleExportProgress);
   nav.appendChild(exportButton);
@@ -1487,6 +1637,7 @@ function renderHeader() {
   const restartButton = el('button', { className: 'nav-button danger', text: '새 게임' });
   restartButton.addEventListener('click', handleNewGame);
   nav.appendChild(restartButton);
+  header.appendChild(nav);
   return header;
 }
 
@@ -1524,8 +1675,6 @@ function renderContent() {
     onOfferingsChange: updateOfferings,
     onSwapUnits: handleSwapUnits,
     onSellUnit: handleSellUnit,
-    onBuyExperience: handleBuyExperience,
-    experienceOffer: getExperiencePurchaseOffer(state.runState),
     onStartBattle: handleStartBattle,
     onPlacementChange: handlePlacementChange,
     onToggleShop: handleToggleShop,
@@ -1534,14 +1683,6 @@ function renderContent() {
     shopReady: state.shopReady,
     shopLocked: state.shopLocked,
     summaryVisible: state.summaryVisible && !!state.lastOutcome,
-    audioOptions: {
-      lobby: { tracks: LOBBY_BGM, selected: state.audioSelection.lobby },
-      battle: { tracks: BATTLE_BGM, selected: state.audioSelection.battle },
-      effects: { tracks: EFFECT_SETS, selected: state.audioSelection.effects },
-    },
-    onAudioChange: handleAudioChange,
-    audioSettings: state.audioSettings,
-    onAudioSettingsChange: handleAudioSettingsChange,
     lastOutcome: state.lastOutcome,
     upcomingEncounter: state.nextEncounter,
     onDismissOutcome: handleDismissOutcome,

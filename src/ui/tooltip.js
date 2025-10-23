@@ -10,14 +10,38 @@ class Tooltip {
     window.addEventListener('scroll', () => this.hide());
   }
 
-  show(text, position) {
-    if (!text) {
+  setContent(content) {
+    if (!this.element) {
+      return;
+    }
+    while (this.element.firstChild) {
+      this.element.removeChild(this.element.firstChild);
+    }
+    if (typeof content === 'string') {
+      this.element.textContent = content;
+      this.element.classList.remove('rich');
+      return;
+    }
+    if (content instanceof Node) {
+      this.element.appendChild(content);
+      this.element.classList.add('rich');
+      return;
+    }
+    this.element.textContent = '';
+    this.element.classList.remove('rich');
+  }
+
+  show(content, position) {
+    if (!content) {
       return;
     }
     if (!this.element) {
       return;
     }
-    this.element.textContent = text;
+    this.setContent(content);
+    if (!this.element.firstChild && this.element.textContent === '') {
+      return;
+    }
     this.element.classList.remove('hidden');
     this.visible = true;
     this.position(position);

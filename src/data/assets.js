@@ -11,10 +11,17 @@ const portrait = (id, color) => {
     `assets/portraits/${id}.png`,
     `assets/portraits/${id}.webp`,
   ]);
+  const splashSources = uniqueSources([
+    `assets/portraits/${id}/splash.png`,
+    `assets/portraits/${id}/splash.webp`,
+    `assets/portraits/${id}_splash.png`,
+    `assets/portraits/${id}_splash.webp`,
+  ]);
   return {
     id,
     src: sources[0] || null,
     sources,
+    splashSources,
     fallback: { shape: 'circle', color },
   };
 };

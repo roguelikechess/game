@@ -227,6 +227,7 @@ export function createUnitCard({
         skill: getUnitSkill(definition.id, unit?.level || 1),
         items,
         extraLines: tooltipExtra,
+        portraitId: definition?.portraitId,
       }),
     { anchor: isShopMode || isMinimalMode ? 'element' : 'cursor' }
   );

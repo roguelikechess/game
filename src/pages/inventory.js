@@ -85,6 +85,7 @@ function createUnitPanel(unit, options) {
       skill: definition ? getUnitSkill(definition.id, unit.level || 1) : null,
       level: unit.level,
       items: summarizeUnitItems(unit),
+      portraitId: definition?.portraitId,
     });
   });
 

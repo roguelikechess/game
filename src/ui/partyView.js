@@ -142,6 +142,7 @@ export function createPartyView(party, title = 'Party Formation', options = {}) 
           skill: definition ? getUnitSkill(definition.id, unit.level || 1) : null,
           level: unit.level,
           items: summarizeUnitItems(unit),
+          portraitId: definition?.portraitId,
         });
       });
 

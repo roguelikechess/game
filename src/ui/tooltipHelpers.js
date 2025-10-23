@@ -1,5 +1,6 @@
 import { getTooltip } from './tooltip.js';
 import { formatLevelBadge } from './identity.js';
+import { el } from './dom.js';
 import {
   ITEM_BLUEPRINTS,
   computeItemEffectValues,
@@ -7,6 +8,7 @@ import {
   getItemSellValue,
 } from '../game/items.js';
 import { getSkillLevelModifiers } from '../game/skills.js';
+import { getPortraitById } from '../data/assets.js';
 
 const ROLE_LABELS = {
   frontline: '전열',
@@ -73,6 +75,48 @@ const MODIFIER_LABELS = {
   debuffDurationReduction: '디버프 지속 시간 감소',
   shieldShredOnHit: '공격 시 보호막 약화',
 };
+
+function createTooltipPortraitElement(asset, root) {
+  if (!asset?.splashSources?.length) {
+    return null;
+  }
+  const sources = Array.from(new Set(asset.splashSources.filter(Boolean)));
+  if (!sources.length) {
+    return null;
+  }
+  const frame = el('div', { className: 'unit-tooltip-portrait loading' });
+  if (asset.fallback?.color) {
+    frame.style.backgroundColor = asset.fallback.color;
+  }
+  const image = new Image();
+  image.decoding = 'async';
+  image.loading = 'lazy';
+  let index = 0;
+  const tryNext = () => {
+    if (index >= sources.length) {
+      frame.remove();
+      if (root) {
+        root.classList.remove('has-portrait');
+      }
+      return;
+    }
+    const src = sources[index];
+    index += 1;
+    image.onload = () => {
+      frame.style.backgroundImage = `url(${image.src})`;
+      frame.classList.remove('loading');
+      if (root) {
+        root.classList.add('has-portrait');
+      }
+    };
+    image.onerror = () => {
+      tryNext();
+    };
+    image.src = src;
+  };
+  tryNext();
+  return frame;
+}
 
 function formatStat(value) {
   if (value === undefined || value === null) {
@@ -413,6 +457,7 @@ export function buildUnitTooltip({
   skill,
   items = [],
   extraLines = [],
+  portraitId = null,
 }) {
   const lines = [];
   if (name) {
@@ -510,7 +555,16 @@ export function buildUnitTooltip({
   if (extraLines.length) {
     lines.push(...extraLines);
   }
-  return lines.join('\n');
+  const root = el('div', { className: 'unit-tooltip' });
+  const portraitAsset = portraitId ? getPortraitById(portraitId) : null;
+  const portraitElement = createTooltipPortraitElement(portraitAsset, root);
+  if (portraitElement) {
+    root.appendChild(portraitElement);
+  }
+  const body = el('div', { className: 'unit-tooltip-body' });
+  body.textContent = lines.join('\n');
+  root.appendChild(body);
+  return root;
 }
 
 export function buildItemTooltip(item) {
