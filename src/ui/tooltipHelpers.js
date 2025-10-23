@@ -76,7 +76,7 @@ const MODIFIER_LABELS = {
   shieldShredOnHit: '공격 시 보호막 약화',
 };
 
-function createTooltipPortraitElement(asset, root) {
+function createTooltipPortraitElement(asset, root, rarity) {
   if (!asset?.splashSources?.length) {
     return null;
   }
@@ -85,6 +85,9 @@ function createTooltipPortraitElement(asset, root) {
     return null;
   }
   const frame = el('div', { className: 'unit-tooltip-portrait loading' });
+  if (rarity) {
+    frame.dataset.rarity = rarity;
+  }
   if (asset.fallback?.color) {
     frame.style.backgroundColor = asset.fallback.color;
   }
@@ -557,7 +560,7 @@ export function buildUnitTooltip({
   }
   const root = el('div', { className: 'unit-tooltip' });
   const portraitAsset = portraitId ? getPortraitById(portraitId) : null;
-  const portraitElement = createTooltipPortraitElement(portraitAsset, root);
+  const portraitElement = createTooltipPortraitElement(portraitAsset, root, rarity);
   if (portraitElement) {
     root.appendChild(portraitElement);
   }

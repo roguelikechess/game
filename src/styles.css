@@ -1181,6 +1181,26 @@ a {
   border: 2px solid rgba(255, 255, 255, 0.15);
 }
 
+.unit-tooltip-portrait[data-rarity='common'] {
+  border-color: var(--rarity-common);
+}
+
+.unit-tooltip-portrait[data-rarity='uncommon'] {
+  border-color: var(--rarity-uncommon);
+}
+
+.unit-tooltip-portrait[data-rarity='rare'] {
+  border-color: var(--rarity-rare);
+}
+
+.unit-tooltip-portrait[data-rarity='unique'] {
+  border-color: var(--rarity-unique);
+}
+
+.unit-tooltip-portrait[data-rarity='epic'] {
+  border-color: var(--rarity-epic);
+}
+
 .unit-tooltip-body {
   font-size: 0.84rem;
   line-height: 1.55;
@@ -1604,23 +1624,23 @@ a {
 }
 
 .item-chip.common {
-  background: linear-gradient(135deg, #4b5568, #596171);
+  background: linear-gradient(135deg, #c8d1df, var(--rarity-common));
 }
 
 .item-chip.uncommon {
-  background: linear-gradient(135deg, #2f7f5d, #3f9c73);
+  background: linear-gradient(135deg, #8ddcb0, var(--rarity-uncommon));
 }
 
 .item-chip.rare {
-  background: linear-gradient(135deg, #3154c4, #4b75ec);
+  background: linear-gradient(135deg, #b894ff, var(--rarity-rare));
 }
 
 .item-chip.unique {
-  background: linear-gradient(135deg, #a6531a, #c67833);
+  background: linear-gradient(135deg, #ffbf80, var(--rarity-unique));
 }
 
 .item-chip.epic {
-  background: linear-gradient(135deg, #6a32c8, #8b4ee9);
+  background: linear-gradient(135deg, #f3d36a, var(--rarity-epic));
 }
 
 .item-upgrade-badge {

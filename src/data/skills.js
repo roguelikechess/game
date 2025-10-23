@@ -68,6 +68,22 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'stun-strike', damageMultiplier: 1.5, stunDuration: 2.4 },
     cooldown: 14,
   },
+  'aurora-bulwark': {
+    name: '오로라의 보루',
+    jobId: 'knight',
+    description:
+      '반경 160의 아군에게 260 보호막과 7초 동안 방어력 +24, 마법 방어력 +24를 부여하며 적에게 70% 피해를 준다.',
+    effect: {
+      kind: 'ward-pulse',
+      radius: 160,
+      shieldValue: 260,
+      defenseBonus: 24,
+      magicDefenseBonus: 24,
+      duration: 7,
+      damageMultiplier: 0.7,
+    },
+    cooldown: 15,
+  },
   'guardian-oath': {
     name: '수호의 서약',
     jobId: 'knight',
@@ -144,6 +160,13 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'warcry', healPercent: 0.12, fearDuration: 1.6 },
     cooldown: 16,
   },
+  'tremor-guard': {
+    name: '진동 방패강타',
+    jobId: 'warrior',
+    description: '방패를 내려쳐 반경 110의 적에게 120% 피해와 3초 동안 35% 둔화를 가한다.',
+    effect: { kind: 'ground-slam', radius: 110, damageMultiplier: 1.2, slow: 0.35 },
+    cooldown: 12,
+  },
   'seismic-crash': {
     name: '지각 붕괴',
     jobId: 'warrior',
@@ -216,6 +239,13 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'seeker-barrage', targets: 5, damageMultiplier: 0.78, ramp: 0.16, pierce: 0.4 },
     cooldown: 15,
   },
+  'moonlight-salvo': {
+    name: '월광 포화',
+    jobId: 'archer',
+    description: '4명의 적을 추적해 90% 피해를 주고 타격마다 15%씩 강해지며 18% 둔화를 남긴다.',
+    effect: { kind: 'seeker-barrage', targets: 4, damageMultiplier: 0.9, ramp: 0.15, slow: 0.18, pierce: 0.25 },
+    cooldown: 13,
+  },
   'arcane-comet': {
     name: '비전 혜성',
     jobId: 'mage',
@@ -248,6 +278,14 @@ const SKILL_BLUEPRINTS = {
     cooldown: 5.5,
     spellPowerScaling: { damage: 0.55, effect: 0.0009, mana: 0.12 },
   },
+  'glacial-prism': {
+    name: '빙결 프리즘',
+    jobId: 'mage',
+    description: '2차례의 냉기 파동으로 각 112% 피해를 주고 맞은 적을 1.8초간 28% 둔화시킨다.',
+    effect: { kind: 'arcane-cascade', pulses: 2, damageMultiplier: 1.12, radius: 130, slow: 0.28 },
+    cooldown: 6,
+    spellPowerScaling: { damage: 0.58, effect: 0.0008, duration: 0.00045 },
+  },
   'celestial-burst': {
     name: '천구 폭발',
     jobId: 'mage',
@@ -256,6 +294,14 @@ const SKILL_BLUEPRINTS = {
     effect: { kind: 'arcane-cascade', pulses: 4, damageMultiplier: 1.15, radius: 150, manaGift: 18, slow: 0.22 },
     cooldown: 6.5,
     spellPowerScaling: { damage: 0.6, effect: 0.001, mana: 0.1 },
+  },
+  'prismatic-surge': {
+    name: '프리즘 폭류',
+    jobId: 'mage',
+    description: '3차례 프리즘 광선을 발사해 각 118% 피해를 주고 2.5초 동안 받는 피해를 10% 증가시킨다.',
+    effect: { kind: 'arcane-cascade', pulses: 3, damageMultiplier: 1.18, damageTakenBonus: 0.1, manaGift: 16 },
+    cooldown: 5.5,
+    spellPowerScaling: { damage: 0.62, effect: 0.00085, mana: 0.12 },
   },
   'radiant-mending': {
     name: '광휘 치유',
@@ -366,6 +412,31 @@ const SKILL_BLUEPRINTS = {
     },
     cooldown: 14,
     spellPowerScaling: { shield: 0.38, effect: 0.0005, mana: 0.09 },
+  },
+  'luminous-veil': {
+    name: '찬란한 장막',
+    jobId: 'consecrator',
+    description:
+      '7초 동안 아군에게 주문력 +32, 방어력 +16, 마법 방어력 +16과 180 보호막, 초당 마나 9를 부여한다.',
+    effect: {
+      kind: 'sanctify-wave',
+      duration: 7,
+      spellPowerBonus: 32,
+      defenseBonus: 16,
+      magicDefenseBonus: 16,
+      shieldValue: 180,
+      manaPerSecond: 9,
+    },
+    cooldown: 15,
+    spellPowerScaling: { effect: 0.00055, duration: 0.0004, shield: 0.38, mana: 0.09 },
+  },
+  'gloom-ritual': {
+    name: '그늘 의식',
+    jobId: 'warlock',
+    description: '대상을 6초 동안 저주해 받는 피해를 18% 늘리고 치유 효과를 25% 약화시킨다.',
+    effect: { kind: 'curse', damageTakenBonus: 0.18, healReduction: 0.25, duration: 6 },
+    cooldown: 10,
+    spellPowerScaling: { effect: 0.00045, duration: 0.00035 },
   },
   'shadow-hex': {
     name: '그림자 저주',
