@@ -232,6 +232,20 @@ const AUGMENTS = [
     },
   }),
   makeAugment({
+    id: 'mystic-aegis',
+    name: '신비의 수호',
+    description: '아군 전체의 마법 방어력을 끌어올립니다.',
+    format: (power) => `아군의 마법 방어력이 ${Math.round(power * 12)}% 증가하고 주문력이 ${Math.round(
+      power * 4
+    )}% 상승합니다.`,
+    apply({ ally }, power) {
+      ally.push((unit) => {
+        scaleStat(unit, 'magicDefense', 0.12 * power);
+        scaleStat(unit, 'spellPower', 0.04 * power);
+      });
+    },
+  }),
+  makeAugment({
     id: 'arcane-conduit',
     name: '비전 도관',
     description: '마법사의 주문력이 강화됩니다.',
