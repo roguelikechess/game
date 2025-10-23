@@ -121,6 +121,7 @@ export function createPartyView(party, title = 'Party Formation', options = {}) 
         rarity: definition?.rarity,
         className: 'portrait-token',
         markerSize: 'mini',
+        markerPlacement: 'below',
       });
       tile.appendChild(portraitVisual.element);
 
@@ -147,6 +148,21 @@ export function createPartyView(party, title = 'Party Formation', options = {}) 
         });
       });
 
+      const nameplate = createNameplate({
+        name: definition?.name || '???',
+        rarity: definition?.rarity,
+        short: true,
+        className: 'portrait-name',
+      });
+      const markers = portraitVisual.markers;
+      if (markers?.parentElement === portraitVisual.element) {
+        portraitVisual.element.removeChild(markers);
+      }
+      portraitVisual.element.appendChild(nameplate.element);
+      if (markers) {
+        portraitVisual.element.appendChild(markers);
+      }
+
       if (unit.items?.length) {
         const itemRow = el('div', { className: 'portrait-item-row' });
         unit.items.forEach((item) => {
@@ -155,14 +171,6 @@ export function createPartyView(party, title = 'Party Formation', options = {}) 
         });
         tile.appendChild(itemRow);
       }
-
-      const nameplate = createNameplate({
-        name: definition?.name || '???',
-        rarity: definition?.rarity,
-        short: true,
-        className: 'portrait-name',
-      });
-      tile.appendChild(nameplate.element);
     } else {
       const placeholder = el('div', { className: 'portrait-token placeholder', text: '+' });
       tile.appendChild(placeholder);

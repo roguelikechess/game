@@ -65,11 +65,21 @@ export function createPortraitVisual({
   className = 'portrait-token',
   showMarkers = true,
   markerSize = 'small',
+  markerPlacement = 'side',
 }) {
   const name = definition?.name || '???';
   const portraitAsset = definition?.portraitId ? getPortraitById(definition.portraitId) : null;
 
-  const wrapper = el('div', { className: 'portrait-visual' });
+  const wrapperClassNames = ['portrait-visual'];
+  if (markerPlacement === 'below') {
+    wrapperClassNames.push('marker-placement-below');
+  }
+  const wrapper = el('div', { className: wrapperClassNames.join(' ') });
+  if (rarity) {
+    wrapper.dataset.rarity = rarity;
+  } else {
+    wrapper.dataset.rarity = 'common';
+  }
   const portrait = el('div', { className });
 
   const placeholder = buildInitials(name);
