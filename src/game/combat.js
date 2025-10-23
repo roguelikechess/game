@@ -2736,7 +2736,11 @@ function simulateBattle(allies, enemies) {
     });
   }
 
-  const victorious = livingUnits(enemies).length === 0 && livingUnits(allies).length > 0;
+  const remainingAllies = livingUnits(allies);
+  const remainingEnemies = livingUnits(enemies);
+  const timedOut =
+    time >= MAX_TIME && remainingAllies.length > 0 && remainingEnemies.length > 0;
+  const victorious = remainingEnemies.length === 0 && remainingAllies.length > 0;
 
   return {
     events,
@@ -2745,6 +2749,7 @@ function simulateBattle(allies, enemies) {
     allies,
     enemies,
     victorious,
+    timedOut,
   };
 }
 
@@ -2793,5 +2798,6 @@ export function resolveCombat({ party, round = 1, placements = {}, encounter = n
     duration: outcome.duration,
     fallenAllies,
     survivingAllies,
+    timedOut: outcome.timedOut,
   };
 }

@@ -577,6 +577,12 @@ function describeOutcome(outcome, casualties) {
     }
     return `승리! ${casualtyCount}명의 아군이 전사했습니다.`;
   }
+  if (outcome.timedOut) {
+    if (casualtyCount === 0) {
+      return '시간 초과! 아군이 전열을 정비하고 재도전을 준비합니다.';
+    }
+    return `시간 초과! ${casualtyCount}명의 아군이 쓰러졌습니다. 전열을 재정비하세요.`;
+  }
   return '패배했습니다. 이번 도전은 여기서 종료됩니다.';
 }
 
@@ -738,6 +744,14 @@ function prepareBattleTransition(outcome, currentRun) {
   }
 
   const performance = summarizeBattlePerformance(outcome);
+  const enemyCombatants =
+    outcome.combatants && Array.isArray(outcome.combatants.enemies)
+      ? outcome.combatants.enemies
+      : [];
+  const livingEnemyCount = enemyCombatants.filter((unit) => unit.health > 0).length;
+  const timedOut = !!outcome.timedOut;
+  const stalemate =
+    timedOut && outcome.survivingAllies.length > 0 && livingEnemyCount > 0;
 
   let nextRun = {
     ...currentRun,
@@ -783,6 +797,10 @@ function prepareBattleTransition(outcome, currentRun) {
     if (bossRound) {
       lootMessages.push(`보스 라운드 보상으로 ${goldEarned} 골드를 획득했습니다.`);
     }
+  } else if (stalemate) {
+    offerings = (state.shopOfferings || []).map((offer) => ({ ...offer }));
+    shopReady = true;
+    shopVisible = true;
   } else {
     nextRun = { ...nextRun, gameOver: true };
   }
@@ -799,6 +817,43 @@ function prepareBattleTransition(outcome, currentRun) {
       : { ...currentShop, offerings: preservedOfferings };
   nextRun = { ...nextRun, itemShop: nextItemShop };
 
+  const outcomeLog = outcome.log
+    .concat(
+      lootMessages.map((message) => ({
+        round: currentRun.round,
+        actor: '전리품',
+        action: message,
+      }))
+    )
+    .concat(
+      experienceGained > 0
+        ? [
+            {
+              round: currentRun.round,
+              actor: '용병단',
+              action: `경험치 ${experienceGained} 획득 (${nextRun.companyExperience}/${nextRun.companyExpToNext})`,
+            },
+            ...(levelsGained > 0
+              ? [
+                  {
+                    round: currentRun.round,
+                    actor: '용병단',
+                    action: `레벨 ${nextRun.companyLevel - levelsGained} → ${nextRun.companyLevel}`,
+                  },
+                ]
+              : []),
+          ]
+        : []
+    );
+
+  if (stalemate) {
+    outcomeLog.push({
+      round: currentRun.round,
+      actor: '전투',
+      action: '시간 초과로 전투가 중단되었습니다. 전열을 정비하세요.',
+    });
+  }
+
   const lastOutcome = {
     victorious: outcome.victorious,
     summary: describeOutcome(outcome, fallenRecords),
@@ -813,36 +868,11 @@ function prepareBattleTransition(outcome, currentRun) {
         }
       : null,
     casualties: fallenRecords,
-    log: outcome.log
-      .concat(
-        lootMessages.map((message) => ({
-          round: currentRun.round,
-          actor: '전리품',
-          action: message,
-        }))
-      )
-      .concat(
-        experienceGained > 0
-          ? [
-              {
-                round: currentRun.round,
-                actor: '용병단',
-                action: `경험치 ${experienceGained} 획득 (${nextRun.companyExperience}/${nextRun.companyExpToNext})`,
-              },
-              ...(levelsGained > 0
-                ? [
-                    {
-                      round: currentRun.round,
-                      actor: '용병단',
-                      action: `레벨 ${nextRun.companyLevel - levelsGained} → ${nextRun.companyLevel}`,
-                    },
-                  ]
-                : []),
-            ]
-          : []
-      ),
+    log: outcomeLog,
     loot: lootRecord,
     performance,
+    timedOut,
+    stalemate,
   };
 
   if (lastOutcome.victorious && bossRound) {
