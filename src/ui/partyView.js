@@ -143,6 +143,7 @@ export function createPartyView(party, title = 'Party Formation', options = {}) 
           level: unit.level,
           items: summarizeUnitItems(unit),
           portraitId: definition?.portraitId,
+          biography: definition?.biography,
         });
       });
 

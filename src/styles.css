@@ -524,6 +524,38 @@ a {
   accent-color: #63a3ff;
 }
 
+.nav-preferences {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid rgba(126, 156, 210, 0.28);
+  font-size: 0.82rem;
+  color: #dbe7ff;
+}
+
+.nav-preference-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nav-preference-toggle input[type='checkbox'] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #63a3ff;
+}
+
+.nav-preference-description {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(219, 231, 255, 0.78);
+}
+
 .navbar .nav-button:hover {
   background: rgba(255, 255, 255, 0.28);
   color: #ffffff;

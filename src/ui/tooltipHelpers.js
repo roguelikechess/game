@@ -10,6 +10,12 @@ import {
 import { getSkillLevelModifiers } from '../game/skills.js';
 import { getPortraitById } from '../data/assets.js';
 
+let tooltipPortraitsEnabled = true;
+
+export function setTooltipPortraitVisibility(enabled) {
+  tooltipPortraitsEnabled = !!enabled;
+}
+
 const ROLE_LABELS = {
   frontline: '전열',
   midline: '중열',
@@ -77,6 +83,9 @@ const MODIFIER_LABELS = {
 };
 
 function createTooltipPortraitElement(asset, root, rarity) {
+  if (!tooltipPortraitsEnabled) {
+    return null;
+  }
   if (!asset?.splashSources?.length) {
     return null;
   }
@@ -461,6 +470,7 @@ export function buildUnitTooltip({
   items = [],
   extraLines = [],
   portraitId = null,
+  biography = null,
 }) {
   const lines = [];
   if (name) {
@@ -480,6 +490,9 @@ export function buildUnitTooltip({
     if (parts.length) {
       lines.push(parts.join(' · '));
     }
+  }
+  if (biography) {
+    lines.push(biography);
   }
   if (level != null) {
     const levelInfo = formatLevelBadge(level);

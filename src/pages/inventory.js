@@ -86,6 +86,7 @@ function createUnitPanel(unit, options) {
       level: unit.level,
       items: summarizeUnitItems(unit),
       portraitId: definition?.portraitId,
+      biography: definition?.biography,
     });
   });
 

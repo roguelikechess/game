@@ -228,6 +228,7 @@ export function createUnitCard({
         items,
         extraLines: tooltipExtra,
         portraitId: definition?.portraitId,
+        biography: definition?.biography,
       }),
     { anchor: isShopMode || isMinimalMode ? 'element' : 'cursor' }
   );
