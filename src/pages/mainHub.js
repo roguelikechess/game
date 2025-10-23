@@ -47,6 +47,13 @@ function simulatePurchaseForUpgrade(party, definitionId) {
   return cloned;
 }
 
+function isUnitOnBench(party, definitionId) {
+  if (!party?.bench?.length) {
+    return false;
+  }
+  return party.bench.some((unit) => unit?.definitionId === definitionId);
+}
+
 function shouldHighlightOffering(party, offering) {
   if (!party || !offering?.unit) {
     return false;
@@ -592,6 +599,15 @@ export function createMainHubPage({
   const offeringList = el('div', { className: 'unit-grid shop-grid' });
   offerings.forEach((offering, index) => {
     const card = createUnitCard({ definitionId: offering.unit.id, mode: 'shop' });
+    if (isUnitOnBench(runState.activeParty, offering.unit.id)) {
+      card.classList.add('bench-duplicate');
+      card.appendChild(
+        el('div', {
+          className: 'bench-note',
+          text: '벤치에 있음',
+        })
+      );
+    }
     if (shouldHighlightOffering(runState.activeParty, offering)) {
       card.classList.add('upgrade-ready');
       card.appendChild(
