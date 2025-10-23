@@ -191,6 +191,115 @@ function describeSpellScaling(scaling) {
   return lines;
 }
 
+function formatBreakdownValue(total, base, bonus, type = 'int', suffix = '') {
+  const totalText = formatValueByType(total, type);
+  const baseText = formatValueByType(base, type);
+  const bonusText = formatValueByType(Math.abs(bonus), type);
+  if (!totalText || !baseText || !bonusText) {
+    return null;
+  }
+  const bonusSign = bonus >= 0 ? '+' : '-';
+  return `${totalText}${suffix}(${baseText}${suffix}${bonusSign}${bonusText}${suffix})`;
+}
+
+function collectSpellPowerBreakdowns(skill, stats = {}) {
+  if (!skill || !skill.spellPowerScaling) {
+    return [];
+  }
+  const spellPower = Number(stats.spellPower) || 0;
+  const scaling = skill.spellPowerScaling;
+  const effect = skill.effect || {};
+  const descriptors = [
+    { scalingKey: 'damage', key: 'damage', label: '피해', type: 'int' },
+    { scalingKey: 'damage', key: 'tickDamage', label: '초당 피해', type: 'int' },
+    { scalingKey: 'damage', key: 'dotDamage', label: '지속 피해', type: 'int' },
+    { scalingKey: 'damage', key: 'pulseDamage', label: '폭발 피해', type: 'int' },
+    { scalingKey: 'heal', key: 'healAmount', label: '즉시 회복', type: 'int' },
+    { scalingKey: 'heal', key: 'flatHeal', label: '추가 회복', type: 'int' },
+    {
+      scalingKey: 'heal',
+      keys: ['tickHeal', 'healPerSecond', 'regen'],
+      label: '초당 회복',
+      type: 'int',
+    },
+    { scalingKey: 'shield', key: 'shieldValue', label: '보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'primaryShield', label: '대상 보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'allyShield', label: '주변 보호막', type: 'int' },
+    { scalingKey: 'shield', key: 'shield', label: '보호막', type: 'int' },
+    {
+      scalingKey: 'mana',
+      keys: ['manaPerSecond'],
+      label: '초당 마나',
+      type: 'decimal',
+      suffix: '/s',
+    },
+    {
+      scalingKey: 'mana',
+      keys: ['manaGift', 'manaGain'],
+      label: '마나 회복',
+      type: 'int',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'attackBonus',
+      label: '공격력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'defenseBonus',
+      label: '방어력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'magicDefenseBonus',
+      label: '마법 방어력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+    {
+      scalingKey: 'effect',
+      key: 'spellPowerBonus',
+      label: '주문력 보너스',
+      type: 'int',
+      mode: 'multiplier',
+    },
+  ];
+  const lines = [];
+  const seen = new Set();
+
+  descriptors.forEach((descriptor) => {
+    const ratio = Number(scaling[descriptor.scalingKey]);
+    if (!ratio) {
+      return;
+    }
+    const keys = descriptor.keys || [descriptor.key];
+    keys
+      .map((key) => ({ key, value: effect ? effect[key] : null }))
+      .filter(({ key }) => key && !seen.has(`${descriptor.scalingKey}:${key}`))
+      .forEach(({ key, value }) => {
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        const total = descriptor.mode === 'multiplier'
+          ? value * (1 + spellPower * ratio)
+          : value + spellPower * ratio;
+        const bonus = total - value;
+        const formatted = formatBreakdownValue(total, value, bonus, descriptor.type, descriptor.suffix || '');
+        if (!formatted) {
+          return;
+        }
+        const label = descriptor.label || key;
+        lines.push(`${label}: ${formatted}`);
+        seen.add(`${descriptor.scalingKey}:${key}`);
+      });
+  });
+  return lines;
+}
+
 function formatLevelDelta(factor) {
   if (!Number.isFinite(factor)) {
     return '+0%';
@@ -367,6 +476,13 @@ export function buildUnitTooltip({
       if (scalingSummary) {
         lines.push(scalingSummary);
       }
+    }
+    const spellBreakdowns = collectSpellPowerBreakdowns(skill, stats);
+    if (spellBreakdowns.length) {
+      lines.push('주요 수치:');
+      spellBreakdowns.forEach((entry) => {
+        lines.push(` - ${entry}`);
+      });
     }
     const scalingDetails = describeSpellScaling(skill.spellPowerScaling);
     if (scalingDetails.length) {

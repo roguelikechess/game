@@ -2174,19 +2174,24 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
         .sort((a, b) => (a.role === 'frontline' ? -1 : 1) - (b.role === 'frontline' ? -1 : 1))
         .slice(0, effect.targets || 3)
         .forEach((ally) => {
-          const attackBonus = Math.round(spellScaler.effect(effect.attackBonus || 12));
-          const defenseBonus = Math.round(spellScaler.effect(effect.defenseBonus || 10));
-          const magicDefenseBonus = effect.magicDefenseBonus
-            ? Math.round(spellScaler.effect(effect.magicDefenseBonus))
-            : 0;
-          const spellPowerBonus = effect.spellPowerBonus
-            ? Math.round(spellScaler.effect(effect.spellPowerBonus))
-            : 0;
+          const attackBase = effect.attackBonus != null ? effect.attackBonus : 12;
+          const defenseBase = effect.defenseBonus != null ? effect.defenseBonus : null;
+          const magicDefenseBase = effect.magicDefenseBonus != null ? effect.magicDefenseBonus : null;
+          const spellPowerBase = effect.spellPowerBonus != null ? effect.spellPowerBonus : null;
+          const attackBonus = Math.round(spellScaler.effect(attackBase));
+          const defenseBonus =
+            defenseBase != null ? Math.round(spellScaler.effect(defenseBase)) : 0;
+          const magicDefenseBonus =
+            magicDefenseBase != null ? Math.round(spellScaler.effect(magicDefenseBase)) : 0;
+          const spellPowerBonus =
+            spellPowerBase != null ? Math.round(spellScaler.effect(spellPowerBase)) : 0;
           const buff = {
             duration: Math.max(3, spellScaler.duration(effect.duration || 6)),
             attackBonus,
-            defenseBonus,
           };
+          if (defenseBonus > 0) {
+            buff.defenseBonus = defenseBonus;
+          }
           if (magicDefenseBonus > 0) {
             buff.magicDefenseBonus = magicDefenseBonus;
           }
@@ -2260,15 +2265,23 @@ function trySkill(actor, allies, enemies, log, events, timestamp) {
       if (!targetEnemy) break;
       {
         const duration = Math.max(2.4, spellScaler.duration(effect.duration || 7));
-        const damageTaken = Math.min(0.5, spellScaler.effect(effect.damageTakenBonus || 0.15));
-        const damagePenalty = Math.min(0.4, spellScaler.effect(effect.damageDealtPenalty || 0.1));
+        const damageTakenBase = effect.damageTakenBonus != null ? effect.damageTakenBonus : 0.15;
+        const damagePenaltyBase = effect.damageDealtPenalty != null ? effect.damageDealtPenalty : 0;
+        const damageTaken = damageTakenBase
+          ? Math.min(0.5, spellScaler.effect(damageTakenBase))
+          : 0;
+        const damagePenalty = damagePenaltyBase
+          ? Math.min(0.4, spellScaler.effect(damagePenaltyBase))
+          : 0;
         const healCut = effect.healReduction ? Math.min(0.9, spellScaler.effect(effect.healReduction)) : 0;
         const wardCut = effect.shieldReduction ? Math.min(0.9, spellScaler.effect(effect.shieldReduction)) : 0;
-        const debuff = {
-          duration,
-          damageTakenBonus: damageTaken,
-          damageDealtPenalty: damagePenalty,
-        };
+        const debuff = { duration };
+        if (damageTaken > 0) {
+          debuff.damageTakenBonus = damageTaken;
+        }
+        if (damagePenalty > 0) {
+          debuff.damageDealtPenalty = damagePenalty;
+        }
         if (healCut > 0) {
           debuff.healReduction = healCut;
         }
