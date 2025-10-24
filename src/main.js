@@ -330,6 +330,7 @@ function hydratePersistedState(parsed) {
       ? parsed.pendingAugmentChoices
       : [],
     activeAugmentChoice: parsed?.activeAugmentChoice || null,
+    inventorySortMode: parsed?.inventorySortMode === 'rarity' ? 'rarity' : 'arrival',
   };
 }
 
@@ -366,6 +367,7 @@ function createPersistedPayload() {
     battleSpeed: state.battleSpeed,
     pendingAugmentChoices: state.pendingAugmentChoices,
     activeAugmentChoice: state.activeAugmentChoice,
+    inventorySortMode: state.inventorySortMode,
   };
 }
 
@@ -492,6 +494,7 @@ const state = {
     musicMuted: false,
   },
   displaySettings: normalizeDisplaySettings(),
+  inventorySortMode: 'arrival',
 };
 
 function applyPersistedStateSnapshot(snapshot) {
@@ -509,6 +512,7 @@ function applyPersistedStateSnapshot(snapshot) {
   state.audioSelection = snapshot.audioSelection;
   state.audioSettings = snapshot.audioSettings;
   state.displaySettings = normalizeDisplaySettings(snapshot.displaySettings);
+  state.inventorySortMode = snapshot.inventorySortMode === 'rarity' ? 'rarity' : 'arrival';
   state.battleSpeed = snapshot.battleSpeed;
   state.pendingAugmentChoices = Array.isArray(snapshot.pendingAugmentChoices)
     ? snapshot.pendingAugmentChoices
@@ -1341,13 +1345,20 @@ function applyAudioSelection(selection) {
 }
 
 function handleAudioChange(kind, value) {
-  state.audioSelection = { ...state.audioSelection, [kind]: value };
-  applyAudioSelection(state.audioSelection);
+  if (!kind) {
+    return;
+  }
+  const nextSelection = { ...state.audioSelection };
+  if (nextSelection[kind] === value) {
+    return;
+  }
+  nextSelection[kind] = value;
+  state.audioSelection = nextSelection;
+  applyAudioSelection(nextSelection);
   if (kind === 'lobby' && !state.runState.gameOver) {
     audioManager.playLobby();
   }
   persistState();
-  renderApp();
 }
 
 function handleAudioSettingsChange(changes, options = {}) {
@@ -1393,6 +1404,15 @@ function handleDisplaySettingsChange(changes, options = {}) {
   }
 }
 
+function handleInventorySortModeChange(mode) {
+  const normalized = mode === 'rarity' ? 'rarity' : 'arrival';
+  if (state.inventorySortMode === normalized) {
+    return;
+  }
+  state.inventorySortMode = normalized;
+  persistState();
+}
+
 function restartRun() {
   clearPersistedState();
   state.runState = createInitialRunState();
@@ -1410,6 +1430,7 @@ function restartRun() {
   state.battleSpeed = 1;
   state.pendingAugmentChoices = [];
   state.activeAugmentChoice = null;
+  state.inventorySortMode = 'arrival';
   ensureNextEncounter(true);
   refreshPendingUpgrades();
   persistState();
@@ -1631,11 +1652,14 @@ function renderHeader() {
     });
     volumeField.appendChild(volumeLabel);
     const slider = el('input', {
-      type: 'range',
-      min: '0',
-      max: '100',
-      value: `${musicSettings.volume}`,
-      step: '1',
+      className: 'nav-audio-volume-slider',
+      attrs: {
+        type: 'range',
+        min: '0',
+        max: '100',
+        value: `${musicSettings.volume}`,
+        step: '1',
+      },
     });
     slider.addEventListener('input', (event) => {
       const raw = Number(event.target.value);
@@ -1727,6 +1751,8 @@ function renderContent() {
       gold: state.runState.gold,
       itemShop: state.runState.itemShop,
       shopRerollCost: ITEM_SHOP_REROLL_COST,
+      sortMode: state.inventorySortMode,
+      onSortModeChange: handleInventorySortModeChange,
     });
   }
   return createMainHubPage({

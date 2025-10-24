@@ -26,6 +26,7 @@ function createUnitPanel(unit, options) {
   const header = el('div', { className: 'inventory-unit-header' });
   const portraitAsset = definition?.portraitId ? getPortraitById(definition.portraitId) : null;
   const portrait = el('div', { className: 'inventory-portrait' });
+  portrait.dataset.rarity = definition?.rarity || 'common';
   const placeholder = (definition?.name || '?')
     .split(' ')
     .map((part) => part[0])
@@ -120,6 +121,8 @@ export function createInventoryPage({
   gold = 0,
   itemShop,
   shopRerollCost = 3,
+  sortMode: initialSortMode = 'arrival',
+  onSortModeChange,
 }) {
   const page = el('div', { className: 'inventory-page page' });
   const layout = el('div', { className: 'inventory-layout' });
@@ -143,7 +146,7 @@ export function createInventoryPage({
   let selectedItemId = null;
   const inventoryDetails = new Map(inventory.map((item) => [item.id, item]));
   const arrivalIndex = new Map(inventory.map((item, index) => [item.id, index]));
-  let sortMode = 'arrival';
+  let currentSortMode = initialSortMode === 'rarity' ? 'rarity' : 'arrival';
 
   const rarityRank = {
     common: 0,
@@ -155,12 +158,12 @@ export function createInventoryPage({
 
   function updateSortButtons() {
     [arrivalButton, rarityButton].forEach((button) => {
-      button.classList.toggle('active', button.dataset.mode === sortMode);
+      button.classList.toggle('active', button.dataset.mode === currentSortMode);
     });
   }
 
   function getSortedInventory() {
-    if (sortMode === 'rarity') {
+    if (currentSortMode === 'rarity') {
       return [...inventory].sort((a, b) => {
         const rarityDiff = (rarityRank[a.rarity] || 0) - (rarityRank[b.rarity] || 0);
         if (rarityDiff !== 0) {
@@ -172,6 +175,16 @@ export function createInventoryPage({
     return [...inventory].sort(
       (a, b) => (arrivalIndex.get(a.id) || 0) - (arrivalIndex.get(b.id) || 0)
     );
+  }
+
+  function applySortModeChange(nextMode) {
+    currentSortMode = nextMode === 'rarity' ? 'rarity' : 'arrival';
+    renderInventoryGrid();
+    refreshSelection();
+    updateSortButtons();
+    if (typeof onSortModeChange === 'function') {
+      onSortModeChange(currentSortMode);
+    }
   }
 
   function renderInventoryGrid() {
@@ -203,11 +216,8 @@ export function createInventoryPage({
   });
   arrivalButton.dataset.mode = 'arrival';
   arrivalButton.addEventListener('click', () => {
-    if (sortMode !== 'arrival') {
-      sortMode = 'arrival';
-      renderInventoryGrid();
-      refreshSelection();
-      updateSortButtons();
+    if (currentSortMode !== 'arrival') {
+      applySortModeChange('arrival');
     }
   });
   const rarityButton = el('button', {
@@ -216,11 +226,8 @@ export function createInventoryPage({
   });
   rarityButton.dataset.mode = 'rarity';
   rarityButton.addEventListener('click', () => {
-    if (sortMode !== 'rarity') {
-      sortMode = 'rarity';
-      renderInventoryGrid();
-      refreshSelection();
-      updateSortButtons();
+    if (currentSortMode !== 'rarity') {
+      applySortModeChange('rarity');
     }
   });
 

@@ -47,7 +47,21 @@ function simulatePurchaseForUpgrade(party, definitionId) {
   return cloned;
 }
 
-function isUnitOnBench(party, definitionId) {
+function isUnitOwned(party, definitionId) {
+  if (!party || !definitionId) {
+    return false;
+  }
+
+  const frontlineMatch = ['frontline', 'midline', 'backline'].some((lineKey) =>
+    Array.isArray(party[lineKey])
+      ? party[lineKey].some((slot) => slot?.unit?.definitionId === definitionId)
+      : false
+  );
+
+  if (frontlineMatch) {
+    return true;
+  }
+
   if (!party?.bench?.length) {
     return false;
   }
@@ -399,7 +413,7 @@ export function createMainHubPage({
   const offeringList = el('div', { className: 'unit-grid shop-grid' });
   offerings.forEach((offering, index) => {
     const card = createUnitCard({ definitionId: offering.unit.id, mode: 'shop' });
-    if (isUnitOnBench(runState.activeParty, offering.unit.id)) {
+    if (isUnitOwned(runState.activeParty, offering.unit.id)) {
       card.classList.add('bench-duplicate');
       card.appendChild(
         el('div', {

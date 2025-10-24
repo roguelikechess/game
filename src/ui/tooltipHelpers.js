@@ -86,10 +86,15 @@ function createTooltipPortraitElement(asset, root, rarity) {
   if (!tooltipPortraitsEnabled) {
     return null;
   }
-  if (!asset?.splashSources?.length) {
+  if (!asset) {
     return null;
   }
-  const sources = Array.from(new Set(asset.splashSources.filter(Boolean)));
+  const sourceList = [
+    ...(Array.isArray(asset.splashSources) ? asset.splashSources : []),
+    ...(Array.isArray(asset.sources) ? asset.sources : []),
+    asset.src || null,
+  ];
+  const sources = Array.from(new Set(sourceList.filter(Boolean)));
   if (!sources.length) {
     return null;
   }
@@ -103,9 +108,14 @@ function createTooltipPortraitElement(asset, root, rarity) {
   if (root) {
     root.classList.add('has-portrait');
   }
-  const image = new Image();
+  const image = el('img', {
+    className: 'unit-tooltip-portrait-image',
+    attrs: { alt: '' },
+  });
   image.decoding = 'async';
   image.loading = 'lazy';
+  frame.appendChild(image);
+
   let index = 0;
   const tryNext = () => {
     if (index >= sources.length) {
@@ -117,15 +127,16 @@ function createTooltipPortraitElement(asset, root, rarity) {
     }
     const src = sources[index];
     index += 1;
-    image.onload = () => {
-      frame.style.backgroundImage = `url(${image.src})`;
-      frame.classList.remove('loading');
-    };
-    image.onerror = () => {
-      tryNext();
-    };
     image.src = src;
   };
+
+  image.addEventListener('load', () => {
+    frame.classList.remove('loading');
+  });
+  image.addEventListener('error', () => {
+    tryNext();
+  });
+
   tryNext();
   return frame;
 }
