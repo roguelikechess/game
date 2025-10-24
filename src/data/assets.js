@@ -8,14 +8,18 @@ const portrait = (id, color) => {
   const sources = uniqueSources([
     `assets/portraits/${id}/portrait.png`,
     `assets/portraits/${id}/portrait.webp`,
+    `assets/portraits/${id}/portrait.jpg`,
     `assets/portraits/${id}.png`,
     `assets/portraits/${id}.webp`,
+    `assets/portraits/${id}.jpg`,
   ]);
   const splashSources = uniqueSources([
     `assets/portraits/${id}/splash.png`,
     `assets/portraits/${id}/splash.webp`,
+    `assets/portraits/${id}/splash.jpg`,
     `assets/portraits/${id}_splash.png`,
     `assets/portraits/${id}_splash.webp`,
+    `assets/portraits/${id}_splash.jpg`,
   ]);
   return {
     id,

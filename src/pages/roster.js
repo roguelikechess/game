@@ -141,6 +141,7 @@ export function createRosterPage(roster, { augments = [], party = null } = {}) {
         skill,
         extraLines,
         portraitId: definition?.portraitId,
+        biography: definition?.biography,
       })
     );
 

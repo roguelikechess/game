@@ -4,6 +4,7 @@ import { getTooltip } from './tooltip.js';
 import { buildUnitTooltip } from './tooltipHelpers.js';
 import { getJobById } from '../game/jobs.js';
 import { describeItem } from '../game/items.js';
+import { getUnitDefinition } from '../game/units.js';
 
 const SPEED_OPTIONS = [
   { value: 1, label: '1x' },
@@ -163,6 +164,7 @@ export function createBattleOverlay({
       return;
     }
     const job = unit.jobId ? getJobById(unit.jobId) : null;
+    const definition = unit.definitionId ? getUnitDefinition(unit.definitionId) : null;
     const battleStats = buildStatsFromUnit(unit);
     const content = buildUnitTooltip({
       name: unit.name,
@@ -175,6 +177,7 @@ export function createBattleOverlay({
       level: unit.level,
       items: Array.isArray(unit.items) ? unit.items.map((item) => describeItem(item)) : [],
       portraitId: unit.portraitId,
+      biography: unit.biography || definition?.biography,
     });
     tooltip.show(content, { x: event.clientX, y: event.clientY });
   });

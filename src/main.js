@@ -54,7 +54,7 @@ import {
 } from './game/augments.js';
 import { ensureNanoidPrefixAtLeast, parseNanoid, nanoid } from './utils/nanoid.js';
 import { getShortName } from './ui/identity.js';
-import { attachTooltip } from './ui/tooltipHelpers.js';
+import { attachTooltip, setTooltipPortraitVisibility } from './ui/tooltipHelpers.js';
 
 const STORAGE_KEY = 'chrono-vanguard-save';
 
@@ -287,6 +287,17 @@ function applyAugmentToRun(run, augmentId, tier) {
   return { ...run, augments };
 }
 
+function normalizeDisplaySettings(settings) {
+  return {
+    disablePortraits: !!(settings && settings.disablePortraits),
+  };
+}
+
+function applyDisplaySettings(settings) {
+  const normalized = normalizeDisplaySettings(settings);
+  setTooltipPortraitVisibility(!normalized.disablePortraits);
+}
+
 function hydratePersistedState(parsed) {
   const runState = sanitizeRunState(parsed?.runState);
   return {
@@ -313,6 +324,7 @@ function hydratePersistedState(parsed) {
       })(),
       musicMuted: !!parsed?.audioSettings?.musicMuted,
     },
+    displaySettings: normalizeDisplaySettings(parsed?.displaySettings),
     battleSpeed: parsed?.battleSpeed || 1,
     pendingAugmentChoices: Array.isArray(parsed?.pendingAugmentChoices)
       ? parsed.pendingAugmentChoices
@@ -350,6 +362,7 @@ function createPersistedPayload() {
     summaryVisible: state.summaryVisible,
     audioSelection: state.audioSelection,
     audioSettings: state.audioSettings,
+    displaySettings: state.displaySettings,
     battleSpeed: state.battleSpeed,
     pendingAugmentChoices: state.pendingAugmentChoices,
     activeAugmentChoice: state.activeAugmentChoice,
@@ -478,6 +491,7 @@ const state = {
     musicVolume: 0.8,
     musicMuted: false,
   },
+  displaySettings: normalizeDisplaySettings(),
 };
 
 function applyPersistedStateSnapshot(snapshot) {
@@ -494,6 +508,7 @@ function applyPersistedStateSnapshot(snapshot) {
   state.summaryVisible = !!snapshot.summaryVisible && !!snapshot.lastOutcome;
   state.audioSelection = snapshot.audioSelection;
   state.audioSettings = snapshot.audioSettings;
+  state.displaySettings = normalizeDisplaySettings(snapshot.displaySettings);
   state.battleSpeed = snapshot.battleSpeed;
   state.pendingAugmentChoices = Array.isArray(snapshot.pendingAugmentChoices)
     ? snapshot.pendingAugmentChoices
@@ -510,6 +525,8 @@ const persisted = loadPersistedState();
 if (persisted) {
   applyPersistedStateSnapshot(persisted);
 }
+
+applyDisplaySettings(state.displaySettings);
 
 const root = document.getElementById('root');
 
@@ -1357,6 +1374,25 @@ function handleAudioSettingsChange(changes, options = {}) {
   }
 }
 
+function handleDisplaySettingsChange(changes, options = {}) {
+  if (!changes || typeof changes !== 'object') {
+    return;
+  }
+  const merged = {
+    ...state.displaySettings,
+    ...changes,
+  };
+  const next = normalizeDisplaySettings(merged);
+  state.displaySettings = next;
+  applyDisplaySettings(next);
+  if (options.persist !== false) {
+    persistState();
+  }
+  if (options.render !== false) {
+    renderApp();
+  }
+}
+
 function restartRun() {
   clearPersistedState();
   state.runState = createInitialRunState();
@@ -1424,6 +1460,7 @@ function handleImportProgress() {
     ensureNextEncounter(false);
     applyAudioSelection(state.audioSelection);
     applyAudioSettings(state.audioSettings);
+    applyDisplaySettings(state.displaySettings);
     persistState();
     renderApp();
     if (!state.audioSettings.musicMuted && !state.runState.gameOver) {
@@ -1520,10 +1557,11 @@ function renderHeader() {
 
   const audioMenu = (() => {
     const details = el('details', { className: 'nav-audio-menu' });
-    const summary = el('summary', { text: '사운드 옵션' });
+    const summary = el('summary', { text: '옵션' });
     details.appendChild(summary);
 
     const panel = el('div', { className: 'nav-audio-panel' });
+    const displaySettings = state.displaySettings || normalizeDisplaySettings();
     const buildSelect = (labelText, tracks, selected, onChange) => {
       if (!Array.isArray(tracks) || tracks.length === 0) {
         return null;
@@ -1621,6 +1659,29 @@ function renderHeader() {
 
     if (panel.childElementCount || actions.childElementCount) {
       panel.appendChild(actions);
+    }
+
+    const preferences = el('div', { className: 'nav-preferences' });
+    const portraitToggle = el('label', { className: 'nav-preference-toggle' });
+    const portraitCheckbox = el('input', { attrs: { type: 'checkbox' } });
+    portraitCheckbox.checked = !!displaySettings.disablePortraits;
+    portraitCheckbox.addEventListener('change', (event) => {
+      handleDisplaySettingsChange({ disablePortraits: event.target.checked }, { render: false });
+    });
+    portraitToggle.appendChild(portraitCheckbox);
+    portraitToggle.appendChild(
+      el('span', { className: 'nav-preference-label', text: '툴팁 초상화 끄기' })
+    );
+    preferences.appendChild(portraitToggle);
+    preferences.appendChild(
+      el('p', {
+        className: 'nav-preference-description',
+        text: '체크 시 툴팁에서 splash 이미지와 테두리가 숨겨집니다.',
+      })
+    );
+
+    if (preferences.childElementCount) {
+      panel.appendChild(preferences);
     }
 
     details.appendChild(panel);

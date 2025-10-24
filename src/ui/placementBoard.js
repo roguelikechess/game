@@ -117,6 +117,7 @@ function renderEnemyPreview(board, encounter) {
         skill: enemy.skill,
         level: enemy.level,
         portraitId: enemy.portraitId,
+        biography: enemy.biography,
       })
     );
     token.appendChild(el('span', { className: 'encounter-token-name', text: enemy.name }));
@@ -195,6 +196,7 @@ export function createPlacementBoard({ party, placements = {}, onChange, encount
           level: unit.level,
           items: summarizeUnitItems(unit),
           portraitId: definition?.portraitId,
+          biography: definition?.biography,
         });
       });
       token.appendChild(el('span', { className: 'token-label', text: definition?.name || 'Unit' }));
